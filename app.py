@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import datetime
+import numpy as np
 
 # ===================== 多语言配置 =====================
 # 定义中英文对照字典
