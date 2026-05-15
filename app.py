@@ -43,20 +43,20 @@ LANG_CONFIG = {
         "missing_vals": "Missing Values",
         "duplicate_rows": "Duplicate Rows",
 
-        # 可视化相关
+        # 可视化相关（核心修复：区分柱状图下拉框文案，避免ID重复）
         "auto_viz": "Automatic Visualization",
         "histogram_title": "Histogram (Value Distribution)",
-        "histogram_select": "Select Numeric Column",
+        "histogram_select": "Select Numeric Column for Histogram",  # 加后缀区分
         "bar_chart_title": "Bar Chart (Category vs Numeric)",
-        "bar_cat_select": "Select Category Column",
-        "bar_num_select": "Select Numeric Column",
+        "bar_cat_select": "Select Category Column for Bar Chart",   # 加后缀区分
+        "bar_num_select": "Select Numeric Column for Bar Chart",    # 加后缀区分
         "heatmap_title": "Correlation Heatmap",
         "dist_title": "Distribution of {col}",
-        "pie_bar_select": "Select Category Column",
+        "pie_bar_select": "Select Category Column for Pie Chart",   # 加后缀区分
 
         # 关键指标
         "key_metrics": "Key Metrics",
-        "key_col_select": "Select Metric Column",
+        "key_col_select": "Select Metric Column for Key Metrics",   # 加后缀区分
         "total_records": "Total Records",
         "mean_val": "Mean Value",
         "max_val": "Max Value",
@@ -137,20 +137,20 @@ LANG_CONFIG = {
         "missing_vals": "缺失值总数",
         "duplicate_rows": "重复行数",
 
-        # 可视化相关
+        # 可视化相关（核心修复：区分柱状图下拉框文案，避免ID重复）
         "auto_viz": "自动可视化",
         "histogram_title": "直方图（数值分布）",
-        "histogram_select": "选择数值列",
+        "histogram_select": "选择直方图数值列",   # 加后缀区分
         "bar_chart_title": "柱状图（分类 vs 数值）",
-        "bar_cat_select": "选择分类列",
-        "bar_num_select": "选择数值列",
+        "bar_cat_select": "选择柱状图分类列",      # 加后缀区分
+        "bar_num_select": "选择柱状图数值列",      # 加后缀区分
         "heatmap_title": "相关性热力图",
         "dist_title": "{col} 分布情况",
-        "pie_bar_select": "选择分类列",
+        "pie_bar_select": "选择饼图分类列",        # 加后缀区分
 
         # 关键指标
         "key_metrics": "关键指标",
-        "key_col_select": "选择指标列",
+        "key_col_select": "选择关键指标数值列",    # 加后缀区分
         "total_records": "总记录数",
         "mean_val": "平均值",
         "max_val": "最大值",
