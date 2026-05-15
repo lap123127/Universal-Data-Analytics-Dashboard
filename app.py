@@ -14,8 +14,13 @@ import json
 
 # 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.sans-serif'] = [
+    'SimHei',         # Windows 中文黑体
+    'WenQuanYi Micro Hei',  # Linux 中文黑体
+    'Hiragino Sans GB',    # Mac 中文黑体
+    'DejaVu Sans'          # 兜底英文
+]
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 plt.rcParams['font.family'] = 'sans-serif'
 
 # 你的API Key
@@ -324,9 +329,13 @@ def main():
     # 读取文件
     try:
         if file.name.endswith(".csv"):
-            df = pd.read_csv(file)
+            # 优先UTF-8，失败则用GBK（解决中文CSV编码问题）
+            try:
+                df = pd.read_csv(file, encoding='utf-8')
+            except UnicodeDecodeError:
+                df = pd.read_csv(file, encoding='gbk')
         else:
-            df = pd.read_excel(file)
+            df = pd.read_excel(file)  # Excel无需额外编码
         st.session_state["original_df"] = df.copy()
         st.session_state["cleaned_df"] = df.copy()
         st.sidebar.success(lang["upload_success"])
@@ -398,7 +407,11 @@ def main():
             col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
-            ax.set_title(lang["dist_title"].format(col=col))
+            # 新增：设置标题/轴标签字体大小，适配中文
+            ax.set_title(lang["dist_title"].format(col=col), fontsize=12)
+            ax.set_xlabel(col, fontsize=11)  # x轴标签（中文列名）
+            ax.set_ylabel("频数" if sel_lang == "zh" else "Frequency", fontsize=11)  # 适配中英文
+            plt.tight_layout()  # 核心：防止中文标签被截断
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -410,7 +423,11 @@ def main():
             bn = st.selectbox(lang["bar_num_select"], num_cols, key="bar_num_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
-            plt.xticks(rotation=45)
+            # 新增：调整x轴标签字体大小+旋转角度，适配中文
+            plt.xticks(rotation=45, fontsize=10)
+            ax.set_xlabel(bc, fontsize=11)  # 分类列（中文）
+            ax.set_ylabel(bn, fontsize=11)  # 数值列（中文）
+            plt.tight_layout()  # 核心：防止中文标签截断
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -419,7 +436,11 @@ def main():
     with t3:
         if len(num_cols)>=2:
             fig, ax = plt.subplots(figsize=(10,6))
-            sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f")
+            corr = st.session_state["cleaned_df"][num_cols].corr()
+            sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax, fmt=".2f")
+            # 新增：设置标题字体+自动布局
+            ax.set_title(lang["heatmap_title"], fontsize=12)
+            plt.tight_layout()  # 防止中文标题/刻度截断
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -427,10 +448,13 @@ def main():
 
     with t4:
         if cat_cols:
-            pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
-            cnt = st.session_state["cleaned_df"][pc].value_counts()
+            pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_cat_unique")
+            # 统计分类列的数值分布
+            pie_data = st.session_state["cleaned_df"][pc].value_counts()
             fig, ax = plt.subplots(figsize=(8,8))
-            ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
+            ax.pie(pie_data.values, labels=pie_data.index, autopct='%1.1f%%', startangle=90)
+            ax.set_title(lang["pie_chart_title"], fontsize=12)
+            plt.tight_layout()  # 防止中文标签溢出
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
