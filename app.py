@@ -7,14 +7,25 @@ from io import BytesIO
 import datetime
 import markdown
 
-# 核心多语言字典（你要修改的核心）
+# 核心多语言字典
 LANG_CONFIG = {
     "en": {
         # 页面基础
         "page_title": "Universal Data Visualization Dashboard",
         "main_title": "📊 Universal Data Analysis Dashboard",
         "main_desc": "Upload your CSV/Excel file for automatic cleaning, visualization and analysis",
-        "lang_switch": "Language / 语言",
+        "lang_switch": "Language",
+        "initial_prompt": "Please upload a CSV or Excel file to start analysis.",
+        "supported_features": "Supported Features",
+        "feature_1": "CSV / Excel file upload",
+        "feature_2": "Data preview & overview",
+        "feature_3": "Advanced data cleaning (missing values, duplicates, outliers)",
+        "feature_4": "Category column filtering",
+        "feature_5": "Automatic chart generation (histogram, bar, heatmap, pie)",
+        "feature_6": "Key metrics display",
+        "feature_7": "Chart export as PNG",
+        "feature_8": "Automatic analysis report (Markdown / HTML)",
+
         # 侧边栏
         "sidebar_upload": "File Upload",
         "upload_label": "Upload CSV/Excel file",
@@ -22,7 +33,8 @@ LANG_CONFIG = {
         "upload_error": "Failed to read file: {e}",
         "basic_filters": "Basic Filters",
         "filter_cat_col": "Filter by Category Column",
-        "filter_keep_vals": "Keep Values",
+        "filter_keep_vals": "Select values to keep",
+
         # 数据预览/概览
         "data_preview": "Data Preview",
         "data_overview": "Data Overview",
@@ -30,8 +42,9 @@ LANG_CONFIG = {
         "total_cols": "Total Columns",
         "missing_vals": "Missing Values",
         "duplicate_rows": "Duplicate Rows",
+
         # 可视化相关
-        "auto_viz": "📈 Automatic Visualization",
+        "auto_viz": "Automatic Visualization",
         "histogram_title": "Histogram (Value Distribution)",
         "histogram_select": "Select Numeric Column",
         "bar_chart_title": "Bar Chart (Category vs Numeric)",
@@ -40,33 +53,41 @@ LANG_CONFIG = {
         "heatmap_title": "Correlation Heatmap",
         "dist_title": "Distribution of {col}",
         "pie_bar_select": "Select Category Column",
+
         # 关键指标
-        "key_metrics": "📊 Key Metrics",
+        "key_metrics": "Key Metrics",
         "key_col_select": "Select Metric Column",
         "total_records": "Total Records",
         "mean_val": "Mean Value",
         "max_val": "Max Value",
         "min_val": "Min Value",
+
         # 下载相关
-        "download_charts": "💾 Download Charts",
+        "download_charts": "Download Charts",
         "download_last_chart": "Prepare Last Chart for Download",
         "download_png": "Download PNG",
+
         # 清洗后数据下载
         "Generate Cleaned Data File": "Generate Cleaned Data File",
         "Download Cleaned CSV": "Download Cleaned CSV",
         "Download Cleaned Excel": "Download Cleaned Excel",
+
         # 分析报告
-        "auto_report": "📝 Automatic Analysis Report",
+        "auto_report": "Automatic Analysis Report",
         "generate_report": "Generate Analysis Report",
         "report_download": "Download Report",
         "download_md": "Download Markdown Report",
         "download_html": "Download HTML Report",
+        "report_title": "Data Analysis Report",
+        "report_generated": "Report generated at: {time}",
+        "report_overview_section": "Data Overview",
+
         # 报告内文案
-        "report_cleaning_section": "### 2. Data Cleaning Summary",
+        "report_cleaning_section": "Data Cleaning Summary",
         "report_cleaning_log": "- {log}",
-        "report_no_cleaning": "- No cleaning steps were performed",
-        "report_metrics_section": "### 3. Key Metrics",
-        "report_viz_section": "### 4. Visualization Insights",
+        "report_no_cleaning": "No cleaning steps were performed",
+        "report_metrics_section": "Key Metrics",
+        "report_viz_section": "Visualization Insights",
         "distribution_normal": "Normal Distribution",
         "distribution_skewed_right": "Right-Skewed Distribution",
         "distribution_skewed_left": "Left-Skewed Distribution",
@@ -75,17 +96,30 @@ LANG_CONFIG = {
         "report_heatmap_insight": "- Heatmap: Strongest positive correlation ({corr}) between {col1} & {col2}; Strongest negative correlation ({corr_neg}) between {col3} & {col4}",
         "report_pie_insight": "- Pie Chart: {top_cat} accounts for {top_pct:.1f}% of {col}",
         "report_no_viz_insight": "- Insufficient data for visualization insights",
-        "report_conclusion_section": "### 5. Conclusion",
+        "report_conclusion_section": "Conclusion",
         "report_conclusion": "The cleaned dataset has {rows} rows and {cols} columns. Key findings: {findings}",
+
         # 提示文案
-        "no_numeric_cols": "No numeric columns found for visualization!",
+        "no_numeric_cols": "No numeric columns found for visualization!"
     },
+
     "zh": {
         # 页面基础
         "page_title": "通用数据可视化分析仪表盘",
         "main_title": "📊 通用数据可视化分析仪表盘",
         "main_desc": "上传CSV/Excel文件，自动完成数据清洗、可视化与分析",
-        "lang_switch": "语言 / Language",
+        "lang_switch": "语言",
+        "initial_prompt": "请上传CSV或Excel文件开始分析",
+        "supported_features": "支持功能",
+        "feature_1": "CSV / Excel 文件上传",
+        "feature_2": "数据预览与概览",
+        "feature_3": "高级数据清洗（缺失值、重复值、异常值）",
+        "feature_4": "分类列筛选",
+        "feature_5": "自动生成图表（直方图、柱状图、热力图、饼图）",
+        "feature_6": "关键指标展示",
+        "feature_7": "图表导出为PNG",
+        "feature_8": "自动生成分析报告（Markdown / HTML）",
+
         # 侧边栏
         "sidebar_upload": "文件上传",
         "upload_label": "上传CSV/Excel文件",
@@ -93,7 +127,8 @@ LANG_CONFIG = {
         "upload_error": "读取文件失败：{e}",
         "basic_filters": "基础筛选",
         "filter_cat_col": "按分类列筛选",
-        "filter_keep_vals": "保留值",
+        "filter_keep_vals": "选择保留的数值",
+
         # 数据预览/概览
         "data_preview": "数据预览",
         "data_overview": "数据概览",
@@ -101,8 +136,9 @@ LANG_CONFIG = {
         "total_cols": "总列数",
         "missing_vals": "缺失值总数",
         "duplicate_rows": "重复行数",
+
         # 可视化相关
-        "auto_viz": "📈 自动可视化",
+        "auto_viz": "自动可视化",
         "histogram_title": "直方图（数值分布）",
         "histogram_select": "选择数值列",
         "bar_chart_title": "柱状图（分类 vs 数值）",
@@ -111,33 +147,41 @@ LANG_CONFIG = {
         "heatmap_title": "相关性热力图",
         "dist_title": "{col} 分布情况",
         "pie_bar_select": "选择分类列",
+
         # 关键指标
-        "key_metrics": "📊 关键指标",
+        "key_metrics": "关键指标",
         "key_col_select": "选择指标列",
         "total_records": "总记录数",
         "mean_val": "平均值",
         "max_val": "最大值",
         "min_val": "最小值",
+
         # 下载相关
-        "download_charts": "💾 下载图表",
+        "download_charts": "下载图表",
         "download_last_chart": "准备下载最后一张图表",
         "download_png": "下载PNG图片",
+
         # 清洗后数据下载
         "Generate Cleaned Data File": "生成清洗后数据文件",
         "Download Cleaned CSV": "下载清洗后CSV",
         "Download Cleaned Excel": "下载清洗后Excel",
+
         # 分析报告
-        "auto_report": "📝 自动生成分析报告",
+        "auto_report": "自动生成分析报告",
         "generate_report": "生成分析报告",
         "report_download": "下载报告",
         "download_md": "下载Markdown报告",
         "download_html": "下载HTML报告",
+        "report_title": "数据分析报告",
+        "report_generated": "报告生成时间：{time}",
+        "report_overview_section": "数据概览",
+
         # 报告内文案
-        "report_cleaning_section": "### 2. 数据清洗总结",
+        "report_cleaning_section": "数据清洗总结",
         "report_cleaning_log": "- {log}",
-        "report_no_cleaning": "- 未执行任何清洗步骤",
-        "report_metrics_section": "### 3. 关键指标",
-        "report_viz_section": "### 4. 可视化洞察",
+        "report_no_cleaning": "未执行任何清洗步骤",
+        "report_metrics_section": "关键指标",
+        "report_viz_section": "可视化洞察",
         "distribution_normal": "正态分布",
         "distribution_skewed_right": "右偏分布",
         "distribution_skewed_left": "左偏分布",
@@ -146,10 +190,11 @@ LANG_CONFIG = {
         "report_heatmap_insight": "- 热力图：{col1} 与 {col2} 正相关性最强（{corr}）；{col3} 与 {col4} 负相关性最强（{corr_neg}）",
         "report_pie_insight": "- 饼图：{top_cat} 占 {col} 的 {top_pct:.1f}%",
         "report_no_viz_insight": "- 数据不足，无法生成可视化洞察",
-        "report_conclusion_section": "### 5. 总结结论",
+        "report_conclusion_section": "总结结论",
         "report_conclusion": "清洗后数据集包含 {rows} 行、{cols} 列。核心发现：{findings}",
+
         # 提示文案
-        "no_numeric_cols": "未找到数值列，无法进行可视化！",
+        "no_numeric_cols": "未找到数值列，无法进行可视化！"
     }
 }
 
