@@ -19,61 +19,61 @@ import platform
 # 屏蔽Matplotlib字体警告
 warnings.filterwarnings('ignore')
 
-# 自动识别系统并配置字体文件（增加兜底逻辑，校验字体是否存在）
+# 自动识别系统并配置字体文件（增加存在性校验+兜底逻辑）
 system = platform.system()
 font_prop = None
-# 定义各系统的字体候选列表（优先级从高到低）
-FONT_CANDIDATES = {
+
+# 定义各系统字体候选（优先级从高到低）
+font_candidates = {
     "Windows": [
-        "C:/Windows/Fonts/msyh.ttc",       # 微软雅黑
-        "C:/Windows/Fonts/simhei.ttf",    # 黑体
-        "C:/Windows/Fonts/arial.ttf"      # 英文兜底
+        ('C:/Windows/Fonts/msyh.ttc', 'Microsoft YaHei'),
+        ('C:/Windows/Fonts/simhei.ttf', 'SimHei'),
+        ('C:/Windows/Fonts/arial.ttf', 'Arial')
     ],
     "Darwin": [
-        "/System/Library/Fonts/PingFang.ttc",  # 苹方
-        "/System/Library/Fonts/Heiti SC.ttc",  # 黑体
-        "/Library/Fonts/Arial Unicode.ttf"     # 英文/中文兜底
+        ('/System/Library/Fonts/PingFang.ttc', 'PingFang SC'),
+        ('/System/Library/Fonts/Heiti SC.ttc', 'Heiti SC'),
+        ('/Library/Fonts/Arial Unicode.ttf', 'Arial Unicode MS')
     ],
     "Linux": [
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",  # 文泉驿微米黑
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", # 英文兜底
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        ('/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', 'WenQuanYi Micro Hei'),
+        ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'DejaVu Sans'),
+        ('', 'DejaVu Sans')  # 无路径则用系统内置字体
     ]
 }
 
-# 加载字体（优先加载第一个可用的字体）
-def load_valid_font():
-    candidates = FONT_CANDIDATES.get(system, FONT_CANDIDATES["Linux"])
-    for font_path in candidates:
-        if os.path.exists(font_path):
-            try:
-                prop = fm.FontProperties(fname=font_path)
-                # 验证字体是否能被识别
-                if prop.get_name():
-                    return prop, font_path
-            except:
-                continue
-    # 终极兜底：使用Matplotlib默认字体（至少保证英文显示）
-    return fm.FontProperties(family='DejaVu Sans'), None
+# 加载第一个存在的字体（兜底逻辑）
+for font_path, font_name in font_candidates.get(system, font_candidates["Linux"]):
+    # Linux系统跳过路径校验（直接用字体名）
+    if system != "Linux" and font_path and not os.path.exists(font_path):
+        continue
+    try:
+        if font_path and os.path.exists(font_path):
+            font_prop = fm.FontProperties(fname=font_path)
+        else:
+            font_prop = fm.FontProperties(family=font_name)
+        break
+    except Exception:
+        continue
 
-font_prop, font_path = load_valid_font()
+# 终极兜底：若所有字体加载失败，用Matplotlib内置字体
+if font_prop is None:
+    font_prop = fm.FontProperties(family='DejaVu Sans')
 
-# 强制配置字体（增加多个兜底字体）
-font_names = [font_prop.get_name()] if font_prop else []
+# 强制配置全局字体（去重+增加兜底）
+font_names = [font_prop.get_name()]
 fallback_fonts = {
     "Windows": ["SimHei", "Microsoft YaHei", "Arial"],
     "Darwin": ["Heiti SC", "PingFang SC", "Arial Unicode MS"],
     "Linux": ["WenQuanYi Micro Hei", "DejaVu Sans", "Liberation Sans"]
 }
 font_names.extend(fallback_fonts.get(system, ["DejaVu Sans"]))
-
-# 核心配置（去重+强制生效）
 plt.rcParams['font.sans-serif'] = list(dict.fromkeys(font_names))  # 去重
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示
 plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.size'] = 10  # 统一字体大小，避免渲染异常
+plt.rcParams['font.size'] = 10  # 统一字体大小
 
-# 覆盖Seaborn样式（强制使用配置的字体）
+# 覆盖Seaborn样式，强制使用配置的字体
 sns.set_style("whitegrid")
 sns.set(font=plt.rcParams['font.sans-serif'][0])
 
@@ -352,22 +352,18 @@ def handle_outliers(df, cols, strategy):
             cdf[col] = np.clip(cdf[col], q1-1.5*iqr, q3+1.5*iqr)
     return cdf
 
-# 修复：统一设置图表字体的工具函数
-def set_plot_fonts(ax, title, xlabel, ylabel, sel_lang):
+# 统一设置图表字体的工具函数（核心修复：移除错误的plt.pie类型判断）
+def set_plot_fonts(ax, title, xlabel, ylabel):
     # 设置标题字体
     ax.set_title(title, fontproperties=font_prop, fontsize=12)
     # 设置坐标轴标签字体
     ax.set_xlabel(xlabel, fontproperties=font_prop, fontsize=11)
     ax.set_ylabel(ylabel, fontproperties=font_prop, fontsize=11)
-    # 设置刻度标签字体（修复：不覆盖原有标签，只改字体）
+    # 设置刻度标签字体（不覆盖标签内容）
     for label in ax.get_xticklabels():
         label.set_fontproperties(font_prop)
     for label in ax.get_yticklabels():
         label.set_fontproperties(font_prop)
-    # 饼图特殊处理
-    if isinstance(ax, plt.pie):
-        for text in ax.texts:
-            text.set_fontproperties(font_prop)
     return ax
 
 def main():
@@ -518,7 +514,7 @@ def main():
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（修复字体绑定逻辑）
+    # 可视化模块（核心修复：刻度标签仅设置字体，不覆盖内容）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
@@ -528,13 +524,12 @@ def main():
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
             
-            # 修复：使用统一字体函数，不再覆盖刻度标签
+            # 统一设置字体（不覆盖刻度标签）
             ax = set_plot_fonts(
                 ax,
                 title=lang["dist_title"].format(col=col),
                 xlabel=col,
-                ylabel="频数" if sel_lang == "zh" else "Frequency",
-                sel_lang=sel_lang
+                ylabel="频数" if sel_lang == "zh" else "Frequency"
             )
             
             plt.tight_layout()
@@ -551,14 +546,13 @@ def main():
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
             
-            # 修复：旋转刻度但不覆盖标签，统一设置字体
-            plt.xticks(rotation=45, ha='right')  # ha='right' 防止标签重叠
+            # 旋转刻度+设置字体（不覆盖标签）
+            plt.xticks(rotation=45, ha='right')
             ax = set_plot_fonts(
                 ax,
-                title="",  # 柱状图无额外标题
+                title="",
                 xlabel=bc,
-                ylabel=bn,
-                sel_lang=sel_lang
+                ylabel=bn
             )
             
             plt.tight_layout()
@@ -574,13 +568,12 @@ def main():
             corr = st.session_state["cleaned_df"][num_cols].corr()
             sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax, fmt=".2f")
             
-            # 修复：热力图字体设置
+            # 设置热力图字体
             ax = set_plot_fonts(
                 ax,
                 title=lang["heatmap_title"],
                 xlabel="",
-                ylabel="",
-                sel_lang=sel_lang
+                ylabel=""
             )
             
             plt.tight_layout()
@@ -597,9 +590,8 @@ def main():
             fig, ax = plt.subplots(figsize=(8,8))
             ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
             
-            # 修复：饼图字体设置（覆盖所有文本）
+            # 饼图单独设置字体（所有文本元素）
             ax.set_title(lang["pie_chart_title"], fontproperties=font_prop, fontsize=12)
-            # 修复：遍历饼图所有文本元素设置字体
             for text in ax.texts:
                 text.set_fontproperties(font_prop)
             
