@@ -11,24 +11,48 @@ import base64
 import warnings
 import requests
 import json
+import platform
+import os
 
 # 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
-# 极简字体配置（仅保证负号正常，中文完全由Streamlit层展示）
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['font.family'] = 'sans-serif'
 
-# 你的API Key（请替换为自己的有效Key）
+# 智能字体配置（兼容Windows/macOS/Linux，优先使用系统中文字体）
+def setup_chinese_font():
+    system = platform.system()
+    try:
+        if system == "Windows":
+            plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
+        elif system == "Darwin":  # macOS
+            plt.rcParams['font.sans-serif'] = ['PingFang SC', 'Heiti SC', 'DejaVu Sans']
+        else:  # Linux
+            # 优先查找系统中文字体，找不到则用默认
+            linux_fonts = ['WenQuanYi Micro Hei', 'Noto Sans CJK SC', 'DejaVu Sans']
+            for font in linux_fonts:
+                try:
+                    plt.rcParams['font.sans-serif'] = [font]
+                    break
+                except:
+                    continue
+        plt.rcParams['axes.unicode_minus'] = False
+        plt.rcParams['font.family'] = 'sans-serif'
+    except:
+        # 兜底方案
+        plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
+        plt.rcParams['axes.unicode_minus'] = False
+
+# 初始化字体
+setup_chinese_font()
+
+# 你的API Key
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
-
 LANG_CONFIG = {
     "en": {
         "page_title": "Universal Data Visualization Dashboard",
         "main_title": "📊 Universal Data Analysis Dashboard",
         "main_desc": "Upload your CSV/Excel file for automatic cleaning, visualization and AI analysis",
         "lang_switch": "Language",
-        "initial_prompt": "Please upload a CSV or Excel file to start analysis.",
+        "initial_prompt": "Please upload a CSV/Excel file to start analysis.",
         "supported_features": "Supported Features",
         "feature_1": "CSV / Excel file upload",
         "feature_2": "Data preview & overview",
@@ -121,8 +145,7 @@ LANG_CONFIG = {
         "report_title": "Analysis Report",
         "report_generated": "Generated at: {time}",
         "no_numeric_cols": "No numeric columns found!",
-        "no_categorical_cols": "No categorical columns found!",
-        "pie_category_note": "Category Note:"
+        "no_categorical_cols": "No categorical columns found!"
     },
     "zh": {
         "page_title": "通用数据可视化分析仪表盘",
@@ -222,8 +245,7 @@ LANG_CONFIG = {
         "report_title": "数据分析报告",
         "report_generated": "报告生成时间：{time}",
         "no_numeric_cols": "未找到数值列！",
-        "no_categorical_cols": "未找到分类列！",
-        "pie_category_note": "分类说明："
+        "no_categorical_cols": "未找到分类列！"
     }
 }
 
@@ -435,21 +457,19 @@ def main():
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（核心修复：中文由Streamlit展示，Matplotlib只绘图）
+    # 可视化模块（恢复图表文字，智能字体适配）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
     with t1:
         if num_cols:
             col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
-            # 中文标题放在Streamlit层（原生支持中文，无字体问题）
-            st.markdown(f"#### {col} 分布情况")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
-            # 清空Matplotlib的所有中文文本渲染
-            ax.set_title("")
-            ax.set_xlabel("")
-            ax.set_ylabel("")
+            # 恢复标题和标签，用智能字体渲染
+            ax.set_title(lang["dist_title"].format(col=col), fontsize=12)
+            ax.set_xlabel(col, fontsize=10)
+            ax.set_ylabel("Frequency", fontsize=10) if sel_lang == "en" else ax.set_ylabel("频次", fontsize=10)
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
             st.session_state["generated_charts"][f"histogram_{col}"] = st.session_state["last_chart_buf"]
@@ -460,15 +480,13 @@ def main():
         if cat_cols and num_cols:
             bc = st.selectbox(lang["bar_cat_select"], cat_cols, key="bar_cat_unique")
             bn = st.selectbox(lang["bar_num_select"], num_cols, key="bar_num_unique")
-            # 中文标题放在Streamlit层
-            st.markdown(f"#### {bc} - {bn} 对比")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
-            # 清空Matplotlib的中文文本
-            ax.set_title("")
-            ax.set_xlabel("")
-            ax.set_ylabel("")
-            plt.xticks(rotation=45)
+            # 恢复标题和标签
+            ax.set_title(f"{bc} - {bn}", fontsize=12)
+            ax.set_xlabel(bc, fontsize=10)
+            ax.set_ylabel(bn, fontsize=10)
+            plt.xticks(rotation=45, ha='right')
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
             st.session_state["generated_charts"][f"bar_{bc}_{bn}"] = st.session_state["last_chart_buf"]
@@ -477,12 +495,10 @@ def main():
 
     with t3:
         if len(num_cols)>=2:
-            # 中文标题放在Streamlit层
-            st.markdown(f"#### 数值列相关性热力图")
             fig, ax = plt.subplots(figsize=(10,6))
-            sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f")
-            # 清空Matplotlib的中文标题
-            ax.set_title("")
+            sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", ax=ax)
+            # 恢复标题
+            ax.set_title(lang["heatmap_title"], fontsize=12)
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
             st.session_state["generated_charts"]["heatmap"] = st.session_state["last_chart_buf"]
@@ -492,23 +508,18 @@ def main():
     with t4:
         if cat_cols:
             pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
-            # 中文标题放在Streamlit层
-            st.markdown(f"#### {pc} 占比分布")
             cnt = st.session_state["cleaned_df"][pc].value_counts()
             fig, ax = plt.subplots(figsize=(8,8))
-            # 饼图不渲染中文标签，避免方块
-            ax.pie(cnt, labels=[""]*len(cnt), autopct="%1.1f%%")
-            # 在Streamlit层展示分类说明
-            st.markdown(f"**{lang['pie_category_note']}**")
-            for idx, val in enumerate(cnt.index):
-                st.markdown(f"- 区块{idx+1}：{val}（{cnt[val]}条）")
+            # 恢复饼图标签
+            ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
+            ax.set_title(f"{pc} 占比分布", fontsize=12) if sel_lang == "zh" else ax.set_title(f"{pc} Distribution", fontsize=12)
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
             st.session_state["generated_charts"][f"pie_{pc}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_categorical_cols"])
 
-    # 下载图表（修复ZIP下载功能+添加数量提示）
+    # 下载图表（保留数量提示功能）
     st.subheader(lang["download_charts"])
     col1, col2 = st.columns(2)
     with col1:
