@@ -233,7 +233,7 @@ def generate_analysis_report(df, cleaned_df, clean_log, numeric_cols, categorica
         if len(numeric_cols) >= 2:
             corr = cleaned_df[numeric_cols].corr()
             # 排除对角线，找最强正相关
-            corr_no_diag = corr.mask(pd.np.triu(pd.np.ones(corr.shape)).astype(bool))
+            corr_no_diag = corr.mask(np.triu(np.ones(corr.shape)).astype(bool))
             max_corr = corr_no_diag.max().max()
             max_pair = corr_no_diag.stack().idxmax()
             # 找最强负相关
