@@ -340,13 +340,14 @@ def main():
     # 读取文件
     try:
         if file.name.endswith(".csv"):
-            # 优先UTF-8，失败则用GBK（解决中文CSV编码问题）
+            # 优先GBK（Windows中文文件默认编码），失败再试UTF-8
             try:
-                df = pd.read_csv(file, encoding='utf-8')
-            except UnicodeDecodeError:
                 df = pd.read_csv(file, encoding='gbk')
+            except UnicodeDecodeError:
+                df = pd.read_csv(file, encoding='utf-8')
         else:
-            df = pd.read_excel(file)  # Excel无需额外编码
+            # Excel文件指定engine，避免编码问题
+            df = pd.read_excel(file, engine='openpyxl')
         st.session_state["original_df"] = df.copy()
         st.session_state["cleaned_df"] = df.copy()
         st.sidebar.success(lang["upload_success"])
