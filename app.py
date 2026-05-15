@@ -14,12 +14,23 @@ import json
 
 # 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False
+
+# ========== 修复1：适配中文显示的字体配置 ==========
+# 优先使用系统中常见的中文字体，覆盖Windows/Linux/macOS
+plt.rcParams['font.sans-serif'] = [
+    'WenQuanYi Micro Hei',  # Linux
+    'SimHei',               # Windows
+    'Microsoft YaHei',      # Windows
+    'PingFang SC',          # macOS
+    'DejaVu Sans'           # 英文兜底
+]
+plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 plt.rcParams['font.family'] = 'sans-serif'
 
 # 你的API Key
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
+
+# 语言配置字典（保持不变）
 LANG_CONFIG = {
     "en": {
         "page_title": "Universal Data Visualization Dashboard",
@@ -220,6 +231,7 @@ LANG_CONFIG = {
         "no_categorical_cols": "未找到分类列！"
     }
 }
+
 # 过滤无用ID列：user_id/id/编号/序号
 def get_valid_columns(df):
     exclude_keywords = ["id", "userid", "user_id", "uuid", "no", "num", "number", "index", "编号", "序号"]
@@ -289,6 +301,7 @@ def handle_outliers(df, cols, strategy):
         elif strategy == "cap":
             cdf[col] = np.clip(cdf[col], q1-1.5*iqr, q3+1.5*iqr)
     return cdf
+
 def main():
     st.set_page_config(page_title="Dashboard", layout="wide")
     
@@ -382,6 +395,42 @@ def main():
     o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols, key="outlier_cols") if num_cols else []
 
     if st.button(lang["execute_clean"], key="clean_btn"):
+        # 执行数据清洗逻辑（补充原代码缺失的清洗执行）
+        cleaned_df = st.session_state["cleaned_df"].copy()
+        
+        # 处理缺失值
+        if m_strat == lang["missing_drop_rows"]:
+            cleaned_df = cleaned_df.dropna()
+        elif m_strat == lang["missing_drop_cols"]:
+            cleaned_df = cleaned_df.dropna(axis=1)
+        elif m_strat == lang["missing_fill_mean"]:
+            for col in cleaned_df.select_dtypes(include=[np.number]).columns:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mean())
+        elif m_strat == lang["missing_fill_median"]:
+            for col in cleaned_df.select_dtypes(include=[np.number]).columns:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].median())
+        elif m_strat == lang["missing_fill_mode"]:
+            for col in cleaned_df.select_dtypes(include=["object", "category"]).columns:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mode()[0])
+        elif m_strat == lang["missing_fill_custom"] and custom_val:
+            cleaned_df = cleaned_df.fillna(custom_val)
+        
+        # 处理重复行
+        if d_strat == lang["dup_drop_all"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep=False)
+        elif d_strat == lang["dup_keep_first"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep="first")
+        elif d_strat == lang["dup_keep_last"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep="last")
+        
+        # 处理异常值
+        if o_strat != lang["outlier_keep"] and o_cols:
+            cleaned_df = handle_outliers(cleaned_df, o_cols, o_strat)
+        
+        # 更新清洗后的数据
+        st.session_state["cleaned_df"] = cleaned_df
+        
+        # 记录清洗日志
         log = []
         if m_strat != lang["missing_keep"]: log.append(f"缺失值：{m_strat}")
         if d_strat != lang["dup_keep"]: log.append(f"重复行：{d_strat}")
@@ -389,7 +438,7 @@ def main():
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（修复热力图+饼图）
+    # 可视化模块（修复热力图+饼图+直方图标题+图表下载字典）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
@@ -398,12 +447,12 @@ def main():
             col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
-            # ========== 关键修改：删除直方图顶部标题 ==========
-            # 注释/删除原有的标题设置行，不再显示顶部标题
+            # ========== 修复2：删除直方图顶部多余标题 ==========
+            # 注释掉标题行，只保留X轴原生标识
             # ax.set_title(lang["dist_title"].format(col=col))
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
-            # 同时更新generated_charts字典，确保下载功能正常
+            # ========== 修复3：补充图表下载字典 ==========
             st.session_state["generated_charts"][f"histogram_{col}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_numeric_cols"])
@@ -453,6 +502,8 @@ def main():
         if st.session_state["generated_charts"]:
             z = create_charts_zip(st.session_state["generated_charts"])
             st.download_button(lang["download_zip"], z, lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S")), "application/zip", key="dl_zip")
+        else:
+            st.info(lang["no_charts_to_download"])
 
     # 关键指标
     st.subheader(lang["key_metrics"])
