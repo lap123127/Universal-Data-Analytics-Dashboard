@@ -415,7 +415,7 @@ if uploaded_file is not None:
 
     # 异常值
     numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_cols = [col for col in df.select_dtypes(include=['object', 'category']).columns.t() if not any(x in col.lower() for x in ['id','userid','user_id'])]
+    categorical_cols = [col for col in df.select_dtypes(include=['object', 'category']).columns.tolist() if not any(x in col.lower() for x in ['id','userid','user_id'])]
     outlier_strategy = lang["outlier_keep"]
     outlier_cols = []
 
