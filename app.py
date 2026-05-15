@@ -43,20 +43,51 @@ LANG_CONFIG = {
         "missing_vals": "Missing Values",
         "duplicate_rows": "Duplicate Rows",
 
-        # 可视化相关（核心修复：区分柱状图下拉框文案，避免ID重复）
+        # ========== 高级数据清洗 全部补全 ==========
+        "advanced_data_cleaning": "Advanced Data Cleaning",
+        "reset_data": "Reset to Original Data",
+        "reset_success": "Data reset to original state!",
+        "step1_missing_title": "Step 1: Handle Missing Values",
+        "missing_strategy_label": "Select strategy for missing values",
+        "missing_keep": "Keep as is",
+        "missing_drop_rows": "Drop rows with missing values",
+        "missing_drop_cols": "Drop columns with missing values",
+        "missing_fill_mean": "Fill with mean (numeric columns)",
+        "missing_fill_median": "Fill with median (numeric columns)",
+        "missing_fill_mode": "Fill with mode (category columns)",
+        "missing_fill_custom": "Custom value fill",
+        "custom_fill_tip": "Enter custom value to fill missing values",
+
+        "step2_dup_title": "Step 2: Handle Duplicate Rows",
+        "dup_strategy_label": "Select strategy for duplicate rows",
+        "dup_keep": "Keep as is",
+        "dup_drop_all": "Drop all duplicates",
+        "dup_keep_first": "Keep first duplicate",
+        "dup_keep_last": "Keep last duplicate",
+
+        "step3_outlier_title": "Step 3: Handle Outliers (Numeric Columns Only)",
+        "outlier_strategy_label": "Select strategy for outliers (IQR method)",
+        "outlier_keep": "Keep as is",
+        "outlier_drop": "Drop rows with outliers",
+        "outlier_cap": "Cap outliers (truncate to IQR range)",
+        "outlier_cols_label": "Select columns to handle outliers",
+        "execute_clean": "Execute All Cleaning Steps",
+        # ==========================================
+
+        # 可视化相关（已修复重复ID）
         "auto_viz": "Automatic Visualization",
         "histogram_title": "Histogram (Value Distribution)",
-        "histogram_select": "Select Numeric Column for Histogram",  # 加后缀区分
+        "histogram_select": "Select Numeric Column for Histogram",
         "bar_chart_title": "Bar Chart (Category vs Numeric)",
-        "bar_cat_select": "Select Category Column for Bar Chart",   # 加后缀区分
-        "bar_num_select": "Select Numeric Column for Bar Chart",    # 加后缀区分
+        "bar_cat_select": "Select Category Column for Bar Chart",
+        "bar_num_select": "Select Numeric Column for Bar Chart",
         "heatmap_title": "Correlation Heatmap",
         "dist_title": "Distribution of {col}",
-        "pie_bar_select": "Select Category Column for Pie Chart",   # 加后缀区分
+        "pie_bar_select": "Select Category Column for Pie Chart",
 
         # 关键指标
         "key_metrics": "Key Metrics",
-        "key_col_select": "Select Metric Column for Key Metrics",   # 加后缀区分
+        "key_col_select": "Select Metric Column for Key Metrics",
         "total_records": "Total Records",
         "mean_val": "Mean Value",
         "max_val": "Max Value",
@@ -102,7 +133,6 @@ LANG_CONFIG = {
         # 提示文案
         "no_numeric_cols": "No numeric columns found for visualization!"
     },
-
     "zh": {
         # 页面基础
         "page_title": "通用数据可视化分析仪表盘",
@@ -137,20 +167,51 @@ LANG_CONFIG = {
         "missing_vals": "缺失值总数",
         "duplicate_rows": "重复行数",
 
-        # 可视化相关（核心修复：区分柱状图下拉框文案，避免ID重复）
+        # ========== 高级数据清洗 全部补全 ==========
+        "advanced_data_cleaning": "高级数据清洗",
+        "reset_data": "重置为原始数据",
+        "reset_success": "数据已重置为原始状态！",
+        "step1_missing_title": "步骤1：处理缺失值",
+        "missing_strategy_label": "选择缺失值处理策略",
+        "missing_keep": "保持不变",
+        "missing_drop_rows": "删除含缺失值的行",
+        "missing_drop_cols": "删除含缺失值的列",
+        "missing_fill_mean": "数值列填充均值",
+        "missing_fill_median": "数值列填充中位数",
+        "missing_fill_mode": "分类列填充众数",
+        "missing_fill_custom": "自定义值填充",
+        "custom_fill_tip": "输入用于填充缺失值的自定义数值",
+
+        "step2_dup_title": "步骤2：处理重复行",
+        "dup_strategy_label": "选择重复行处理策略",
+        "dup_keep": "保持不变",
+        "dup_drop_all": "删除全部重复行",
+        "dup_keep_first": "保留第一条重复数据",
+        "dup_keep_last": "保留最后一条重复数据",
+
+        "step3_outlier_title": "步骤3：处理异常值（仅数值列）",
+        "outlier_strategy_label": "选择异常值处理策略（IQR方法）",
+        "outlier_keep": "保持不变",
+        "outlier_drop": "删除含异常值的行",
+        "outlier_cap": "截断异常值（限制在IQR区间）",
+        "outlier_cols_label": "选择需要处理异常值的列",
+        "execute_clean": "执行全部清洗步骤",
+        # ==========================================
+
+        # 可视化相关（已修复重复ID）
         "auto_viz": "自动可视化",
         "histogram_title": "直方图（数值分布）",
-        "histogram_select": "选择直方图数值列",   # 加后缀区分
+        "histogram_select": "选择直方图数值列",
         "bar_chart_title": "柱状图（分类 vs 数值）",
-        "bar_cat_select": "选择柱状图分类列",      # 加后缀区分
-        "bar_num_select": "选择柱状图数值列",      # 加后缀区分
+        "bar_cat_select": "选择柱状图分类列",
+        "bar_num_select": "选择柱状图数值列",
         "heatmap_title": "相关性热力图",
         "dist_title": "{col} 分布情况",
-        "pie_bar_select": "选择饼图分类列",        # 加后缀区分
+        "pie_bar_select": "选择饼图分类列",
 
         # 关键指标
         "key_metrics": "关键指标",
-        "key_col_select": "选择关键指标数值列",    # 加后缀区分
+        "key_col_select": "选择关键指标数值列",
         "total_records": "总记录数",
         "mean_val": "平均值",
         "max_val": "最大值",
