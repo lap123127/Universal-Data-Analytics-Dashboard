@@ -18,7 +18,7 @@ plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.family'] = 'sans-serif'
 
-# 你的API Key
+# 你的API Key（已替换为你提供的key）
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
 LANG_CONFIG = {
     "en": {
@@ -220,6 +220,7 @@ LANG_CONFIG = {
         "no_categorical_cols": "未找到分类列！"
     }
 }
+
 # 过滤无用ID列：user_id/id/编号/序号
 def get_valid_columns(df):
     exclude_keywords = ["id", "userid", "user_id", "uuid", "no", "num", "number", "index", "编号", "序号"]
@@ -241,7 +242,12 @@ def call_qwen_ai(data_summary, lang="zh"):
 1.Overview 2.Metrics 3.Insights 4.Suggestions
 Data: {data_summary}"""
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
-    payload = {"model": "qwen3.6-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7, "max_tokens": 450}
+    payload = {
+        "model": "qwen3.6-flash", 
+        "messages": [{"role": "user", "content": prompt}], 
+        "temperature": 0.7, 
+        "max_tokens": 450
+    }
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=25)
         resp.raise_for_status()
@@ -274,6 +280,16 @@ def generate_analysis_report(df, cleaned_df, clean_log, num_cols, cat_cols, lang
     rep.append(f"- 总列数：{df.shape[1]}")
     rep.append(f"- 缺失值：{df.isnull().sum().sum()}")
     rep.append(f"- 重复行：{df.duplicated().sum()}")
+    rep.append(f"- 清洗操作：{', '.join(clean_log) if clean_log else '无'}")
+    if num_cols:
+        rep.append(f"\n## 数值列统计")
+        for col in num_cols[:5]:  # 只展示前5个数值列
+            rep.append(f"- {col}：均值={df[col].mean():.2f}，中位数={df[col].median():.2f}，最大值={df[col].max():.2f}，最小值={df[col].min():.2f}")
+    if cat_cols:
+        rep.append(f"\n## 分类列统计")
+        for col in cat_cols[:3]:  # 只展示前3个分类列
+            top_val = df[col].value_counts().index[0]
+            rep.append(f"- {col}：唯一值数量={df[col].nunique()}，最频繁值={top_val}")
     return "\n".join(rep)
 
 # 异常值处理
@@ -289,6 +305,7 @@ def handle_outliers(df, cols, strategy):
         elif strategy == "cap":
             cdf[col] = np.clip(cdf[col], q1-1.5*iqr, q3+1.5*iqr)
     return cdf
+
 def main():
     st.set_page_config(page_title="Dashboard", layout="wide")
     
@@ -308,6 +325,7 @@ def main():
 
     st.title(lang["main_title"])
     st.markdown(lang["main_desc"])
+    st.markdown(lang["ai_disclaimer"])
 
     # 功能列表
     st.subheader(lang["supported_features"])
@@ -341,7 +359,8 @@ def main():
     st.sidebar.subheader(lang["basic_filters"])
     if cat_cols:
         sc = st.sidebar.selectbox(lang["filter_cat_col"], cat_cols, key="filter_cat")
-        vs = st.sidebar.multiselect(lang["filter_keep_vals"], st.session_state["cleaned_df"][sc].unique(), default=list(st.session_state["cleaned_df"][sc].unique()), key="filter_vals")
+        vs = st.sidebar.multiselect(lang["filter_keep_vals"], st.session_state["cleaned_df"][sc].unique(), 
+                                   default=list(st.session_state["cleaned_df"][sc].unique()), key="filter_vals")
         st.session_state["cleaned_df"] = st.session_state["cleaned_df"][st.session_state["cleaned_df"][sc].isin(vs)]
 
     # 数据预览
@@ -382,14 +401,54 @@ def main():
     o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols, key="outlier_cols") if num_cols else []
 
     if st.button(lang["execute_clean"], key="clean_btn"):
+        # 执行缺失值处理
+        temp_df = st.session_state["cleaned_df"].copy()
         log = []
-        if m_strat != lang["missing_keep"]: log.append(f"缺失值：{m_strat}")
-        if d_strat != lang["dup_keep"]: log.append(f"重复行：{d_strat}")
-        if o_strat != lang["outlier_keep"] and o_cols: log.append(f"异常值：{o_strat}")
+        
+        # 缺失值处理
+        if m_strat == lang["missing_drop_rows"]:
+            temp_df = temp_df.dropna()
+            log.append(lang["missing_drop_rows"])
+        elif m_strat == lang["missing_drop_cols"]:
+            temp_df = temp_df.dropna(axis=1)
+            log.append(lang["missing_drop_cols"])
+        elif m_strat == lang["missing_fill_mean"]:
+            for col in temp_df.select_dtypes(include=[np.number]).columns:
+                temp_df[col] = temp_df[col].fillna(temp_df[col].mean())
+            log.append(lang["missing_fill_mean"])
+        elif m_strat == lang["missing_fill_median"]:
+            for col in temp_df.select_dtypes(include=[np.number]).columns:
+                temp_df[col] = temp_df[col].fillna(temp_df[col].median())
+            log.append(lang["missing_fill_median"])
+        elif m_strat == lang["missing_fill_mode"]:
+            for col in temp_df.select_dtypes(include=["object", "category"]).columns:
+                temp_df[col] = temp_df[col].fillna(temp_df[col].mode()[0])
+            log.append(lang["missing_fill_mode"])
+        elif m_strat == lang["missing_fill_custom"] and custom_val:
+            temp_df = temp_df.fillna(custom_val)
+            log.append(f"{lang['missing_fill_custom']} ({custom_val})")
+        
+        # 重复行处理
+        if d_strat == lang["dup_drop_all"]:
+            temp_df = temp_df.drop_duplicates(keep=False)
+            log.append(lang["dup_drop_all"])
+        elif d_strat == lang["dup_keep_first"]:
+            temp_df = temp_df.drop_duplicates(keep="first")
+            log.append(lang["dup_keep_first"])
+        elif d_strat == lang["dup_keep_last"]:
+            temp_df = temp_df.drop_duplicates(keep="last")
+            log.append(lang["dup_keep_last"])
+        
+        # 异常值处理
+        if o_strat != lang["outlier_keep"] and o_cols:
+            temp_df = handle_outliers(temp_df, o_cols, o_strat.split()[0])
+            log.append(f"{lang['outlier_strat']} ({', '.join(o_cols)})")
+        
+        st.session_state["cleaned_df"] = temp_df
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（修复热力图+饼图）
+    # 可视化模块
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
@@ -400,7 +459,10 @@ def main():
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
             ax.set_title(lang["dist_title"].format(col=col))
             st.pyplot(fig)
-            st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            # 保存图表
+            chart_buf = save_plot_to_bytes(fig)
+            st.session_state["last_chart_buf"] = chart_buf
+            st.session_state["generated_charts"][f"histogram_{col}"] = chart_buf
         else:
             st.warning(lang["no_numeric_cols"])
 
@@ -411,85 +473,177 @@ def main():
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
             plt.xticks(rotation=45)
+            ax.set_title(f"{bn} by {bc}")
             st.pyplot(fig)
-            st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            # 保存图表
+            chart_buf = save_plot_to_bytes(fig)
+            st.session_state["last_chart_buf"] = chart_buf
+            st.session_state["generated_charts"][f"bar_{bc}_{bn}"] = chart_buf
         else:
             st.warning(lang["no_categorical_cols"] if not cat_cols else lang["no_numeric_cols"])
 
     with t3:
         if len(num_cols)>=2:
             fig, ax = plt.subplots(figsize=(10,6))
-            sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f")
+            corr_df = st.session_state["cleaned_df"][num_cols].corr()
+            sns.heatmap(corr_df, annot=True, cmap="coolwarm", ax=ax, fmt=".2f")
+            ax.set_title(lang["heatmap_title"])
             st.pyplot(fig)
-            st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            # 保存图表
+            chart_buf = save_plot_to_bytes(fig)
+            st.session_state["last_chart_buf"] = chart_buf
+            st.session_state["generated_charts"]["heatmap"] = chart_buf
         else:
-            st.warning(lang["no_numeric_cols"])
+            st.warning(lang["no_numeric_cols"] if not num_cols else "需要至少2个数值列生成热力图！")
 
     with t4:
         if cat_cols:
             pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
-            cnt = st.session_state["cleaned_df"][pc].value_counts()
+            # 取前10个类别避免图表过于复杂
+            top_categories = st.session_state["cleaned_df"][pc].value_counts().head(10)
             fig, ax = plt.subplots(figsize=(8,8))
-            ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
+            ax.pie(top_categories.values, labels=top_categories.index, autopct='%1.1f%%', startangle=90)
+            ax.set_title(f"{pc} Distribution")
             st.pyplot(fig)
-            st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            # 保存图表
+            chart_buf = save_plot_to_bytes(fig)
+            st.session_state["last_chart_buf"] = chart_buf
+            st.session_state["generated_charts"][f"pie_{pc}"] = chart_buf
         else:
             st.warning(lang["no_categorical_cols"])
-
-    # 下载图表
-    st.subheader(lang["download_charts"])
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.session_state["last_chart_buf"]:
-            st.download_button(lang["download_png"], st.session_state["last_chart_buf"], "chart.png", "image/png", key="dl_png")
-    with col2:
-        if st.session_state["generated_charts"]:
-            z = create_charts_zip(st.session_state["generated_charts"])
-            st.download_button(lang["download_zip"], z, lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S")), "application/zip", key="dl_zip")
 
     # 关键指标
     st.subheader(lang["key_metrics"])
     if num_cols:
-        kc = st.selectbox(lang["key_col_select"], num_cols, key="metric_unique")
+        key_col = st.selectbox(lang["key_col_select"], num_cols, key="key_col")
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric(lang["total_records"], st.session_state["cleaned_df"][kc].count())
-        c2.metric(lang["mean_val"], round(st.session_state["cleaned_df"][kc].mean(),2))
-        c3.metric(lang["max_val"], round(st.session_state["cleaned_df"][kc].max(),2))
-        c4.metric(lang["min_val"], round(st.session_state["cleaned_df"][kc].min(),2))
-        c5.metric(lang["median_val"], round(st.session_state["cleaned_df"][kc].median(),2))
+        col_data = st.session_state["cleaned_df"][key_col]
+        c1.metric(lang["total_records"], len(col_data))
+        c2.metric(lang["mean_val"], f"{col_data.mean():.2f}")
+        c3.metric(lang["max_val"], f"{col_data.max():.2f}")
+        c4.metric(lang["min_val"], f"{col_data.min():.2f}")
+        c5.metric(lang["median_val"], f"{col_data.median():.2f}")
+    else:
+        st.warning(lang["no_numeric_cols"])
+
+    # 下载模块
+    st.subheader(lang["download_charts"])
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.subheader(lang["download_last_chart"])
+        if st.session_state["last_chart_buf"]:
+            st.download_button(
+                label=lang["download_png"],
+                data=st.session_state["last_chart_buf"],
+                file_name=f"chart_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
+                mime="image/png"
+            )
+        else:
+            st.info(lang["no_charts_to_download"])
+    
+    with c2:
+        st.subheader(lang["download_all_charts"])
+        if st.session_state["generated_charts"]:
+            zip_buf = create_charts_zip(st.session_state["generated_charts"])
+            zip_filename = lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+            st.download_button(
+                label=lang["download_zip"],
+                data=zip_buf,
+                file_name=zip_filename,
+                mime="application/zip"
+            )
+        else:
+            st.info(lang["no_charts_to_download"])
+
+    # 下载清洗后数据
+    st.subheader(lang["download_cleaned_data"])
+    c1, c2 = st.columns(2)
+    cleaned_df = st.session_state["cleaned_df"]
+    
+    with c1:
+        csv_buf = StringIO()
+        cleaned_df.to_csv(csv_buf, index=False)
+        st.download_button(
+            label=lang["download_cleaned_csv"],
+            data=csv_buf.getvalue(),
+            file_name=f"cleaned_data_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv"
+        )
+    
+    with c2:
+        excel_buf = BytesIO()
+        cleaned_df.to_excel(excel_buf, index=False, engine="openpyxl")
+        excel_buf.seek(0)
+        st.download_button(
+            label=lang["download_cleaned_excel"],
+            data=excel_buf,
+            file_name=f"cleaned_data_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
     # 自动报告
     st.subheader(lang["auto_report"])
     if st.button(lang["generate_report"], key="gen_report"):
-        r = generate_analysis_report(st.session_state["original_df"], st.session_state["cleaned_df"], st.session_state["clean_log"], num_cols, cat_cols, lang)
-        st.session_state["analysis_report"] = r
-        st.markdown(r)
-
-    # AI 分析（改为独立启动按钮，无勾选框）
-    st.divider()
+        report = generate_analysis_report(
+            st.session_state["original_df"],
+            st.session_state["cleaned_df"],
+            st.session_state["clean_log"],
+            num_cols,
+            cat_cols,
+            lang
+        )
+        st.session_state["analysis_report"] = report
+        st.markdown(report)
+    
+    # AI分析报告
     st.subheader(lang["ai_report"])
-    st.warning(lang["ai_disclaimer"])
-
-    if st.button(lang["generate_ai_report"], type="primary", key="gen_ai"):
+    if st.button(lang["generate_ai_report"], key="gen_ai_report"):
         with st.spinner(lang["ai_report_loading"]):
             try:
-                summary = f"行数：{st.session_state['cleaned_df'].shape[0]}，列数：{st.session_state['cleaned_df'].shape[1]}，有效数值列：{num_cols}，分类列：{cat_cols}"
-                ai_report = call_qwen_ai(summary, sel_lang)
+                # 生成数据摘要
+                data_summary = {
+                    "shape": st.session_state["cleaned_df"].shape,
+                    "missing_values": st.session_state["cleaned_df"].isnull().sum().sum(),
+                    "duplicates": st.session_state["cleaned_df"].duplicated().sum(),
+                    "numeric_stats": {col: {
+                        "mean": st.session_state["cleaned_df"][col].mean(),
+                        "median": st.session_state["cleaned_df"][col].median(),
+                        "min": st.session_state["cleaned_df"][col].min(),
+                        "max": st.session_state["cleaned_df"][col].max()
+                    } for col in num_cols[:5]},
+                    "categorical_stats": {col: {
+                        "unique": st.session_state["cleaned_df"][col].nunique(),
+                        "top": st.session_state["cleaned_df"][col].value_counts().index[0]
+                    } for col in cat_cols[:3]}
+                }
+                ai_report = call_qwen_ai(str(data_summary), sel_lang)
                 st.session_state["ai_analysis_report"] = ai_report
-                st.markdown("---")
                 st.markdown(ai_report)
             except Exception as e:
-                st.error(lang["ai_report_error"].format(e=str(e)))
-
-    # 下载AI报告
-    if st.session_state["ai_analysis_report"]:
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(lang["download_md"], st.session_state["ai_analysis_report"], "ai_report.md", key="dl_md")
-        with col2:
-            html = markdown.markdown(st.session_state["ai_analysis_report"])
-            st.download_button(lang["download_html"], html, "ai_report.html", key="dl_html")
+                st.error(lang["ai_report_error"].format(e=e))
+    
+    # 报告下载
+    if st.session_state["analysis_report"]:
+        st.subheader(lang["report_download"])
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            st.download_button(
+                label=lang["download_md"],
+                data=st.session_state["analysis_report"],
+                file_name=f"analysis_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                mime="text/markdown"
+            )
+        
+        with c2:
+            html_report = markdown.markdown(st.session_state["analysis_report"])
+            st.download_button(
+                label=lang["download_html"],
+                data=html_report,
+                file_name=f"analysis_report_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                mime="text/html"
+            )
 
 if __name__ == "__main__":
     main()
