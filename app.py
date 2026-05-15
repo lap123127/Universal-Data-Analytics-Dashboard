@@ -14,14 +14,25 @@ import json
 
 # 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
-plt.rcParams['font.sans-serif'] = [
-    'SimHei',         # Windows 中文黑体
-    'WenQuanYi Micro Hei',  # Linux 中文黑体
-    'Hiragino Sans GB',    # Mac 中文黑体
-    'DejaVu Sans'          # 兜底英文
-]
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
-plt.rcParams['font.family'] = 'sans-serif'
+# 终极中文适配：自动检测系统字体 + 兜底方案
+import matplotlib.font_manager as fm
+
+# 手动指定字体文件（Windows绝对兼容）
+try:
+    # Windows系统优先用"微软雅黑"（几乎所有Windows都有）
+    font_path = 'C:/Windows/Fonts/msyh.ttc'
+    font_prop = fm.FontProperties(fname=font_path)
+    plt.rcParams['font.family'] = font_prop.get_name()
+except:
+    # 其他系统兜底
+    plt.rcParams['font.sans-serif'] = [
+        'Microsoft YaHei',  # Windows 微软雅黑
+        'SimHei',           # Windows 黑体
+        'PingFang SC',      # Mac 苹方
+        'WenQuanYi Micro Hei', # Linux
+        'DejaVu Sans'       # 最后兜底
+    ]
+plt.rcParams['axes.unicode_minus'] = False  # 负号正常显示
 
 # 你的API Key
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
@@ -407,11 +418,14 @@ def main():
             col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
-            # 新增：设置标题/轴标签字体大小，适配中文
-            ax.set_title(lang["dist_title"].format(col=col), fontsize=12)
-            ax.set_xlabel(col, fontsize=11)  # x轴标签（中文列名）
-            ax.set_ylabel("频数" if sel_lang == "zh" else "Frequency", fontsize=11)  # 适配中英文
-            plt.tight_layout()  # 核心：防止中文标签被截断
+            # 显式指定字体 + 调整标签
+            ax.set_title(lang["dist_title"].format(col=col), fontproperties='Microsoft YaHei', fontsize=12)
+            ax.set_xlabel(col, fontproperties='Microsoft YaHei', fontsize=11)
+            ax.set_ylabel("频数" if sel_lang == "zh" else "Frequency", fontproperties='Microsoft YaHei', fontsize=11)
+            # 坐标轴刻度也指定字体
+            for label in ax.get_xticklabels() + ax.get_yticklabels():
+                label.set_fontproperties('Microsoft YaHei')
+            plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -423,11 +437,13 @@ def main():
             bn = st.selectbox(lang["bar_num_select"], num_cols, key="bar_num_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
-            # 新增：调整x轴标签字体大小+旋转角度，适配中文
-            plt.xticks(rotation=45, fontsize=10)
-            ax.set_xlabel(bc, fontsize=11)  # 分类列（中文）
-            ax.set_ylabel(bn, fontsize=11)  # 数值列（中文）
-            plt.tight_layout()  # 核心：防止中文标签截断
+            plt.xticks(rotation=45, fontproperties='Microsoft YaHei', fontsize=10)
+            ax.set_xlabel(bc, fontproperties='Microsoft YaHei', fontsize=11)
+            ax.set_ylabel(bn, fontproperties='Microsoft YaHei', fontsize=11)
+            # 坐标轴刻度指定字体
+            for label in ax.get_yticklabels():
+                label.set_fontproperties('Microsoft YaHei')
+            plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -438,9 +454,11 @@ def main():
             fig, ax = plt.subplots(figsize=(10,6))
             corr = st.session_state["cleaned_df"][num_cols].corr()
             sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax, fmt=".2f")
-            # 新增：设置标题字体+自动布局
-            ax.set_title(lang["heatmap_title"], fontsize=12)
-            plt.tight_layout()  # 防止中文标题/刻度截断
+            ax.set_title(lang["heatmap_title"], fontproperties='Microsoft YaHei', fontsize=12)
+            # 刻度标签指定字体
+            for label in ax.get_xticklabels() + ax.get_yticklabels():
+                label.set_fontproperties('Microsoft YaHei')
+            plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -448,13 +466,15 @@ def main():
 
     with t4:
         if cat_cols:
-            pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_cat_unique")
-            # 统计分类列的数值分布
-            pie_data = st.session_state["cleaned_df"][pc].value_counts()
+            pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
+            cnt = st.session_state["cleaned_df"][pc].value_counts()
             fig, ax = plt.subplots(figsize=(8,8))
-            ax.pie(pie_data.values, labels=pie_data.index, autopct='%1.1f%%', startangle=90)
-            ax.set_title(lang["pie_chart_title"], fontsize=12)
-            plt.tight_layout()  # 防止中文标签溢出
+            ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
+            ax.set_title(lang["pie_chart_title"], fontproperties='Microsoft YaHei', fontsize=12)
+            # 饼图标签指定字体
+            for text in ax.texts:
+                text.set_fontproperties('Microsoft YaHei')
+            plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
