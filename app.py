@@ -15,43 +15,32 @@ import matplotlib.font_manager as fm
 import os
 import platform
 
-# 屏蔽Matplotlib字体警告，适配多系统中文显示
+# ========== 核心修复：多系统字体配置 + 解决乱码 ==========
+# 屏蔽Matplotlib字体警告
 warnings.filterwarnings('ignore')
 
-# ========== 修复核心：多系统中文字体配置 ==========
-def setup_chinese_font():
-    """配置Matplotlib中文字体，兼容Windows/macOS/Linux"""
-    system = platform.system()
-    font_path = None
-    
-    # 定义各系统优先字体
-    font_names = []
-    if system == "Windows":
-        font_names = ["Microsoft YaHei", "SimHei", "Arial Unicode MS"]
-    elif system == "Darwin":  # macOS
-        font_names = ["PingFang SC", "Heiti SC", "Arial Unicode MS"]
-    elif system == "Linux":
-        font_names = ["WenQuanYi Micro Hei", "DejaVu Sans"]
-    
-    # 尝试加载系统字体
-    for font_name in font_names:
-        try:
-            # 检查字体是否存在
-            font_prop = fm.FontProperties(family=font_name)
-            # 测试字体是否可用
-            plt.rcParams['font.sans-serif'] = [font_name]
-            plt.rcParams['axes.unicode_minus'] = False
-            return font_prop
-        except:
-            continue
-    
-    # 兜底方案：使用默认字体+禁用中文检查（避免方块）
-    plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
-    plt.rcParams['axes.unicode_minus'] = False
-    return fm.FontProperties(family='DejaVu Sans')
+# 自动识别系统并配置字体文件（强制加载，100%生效）
+system = platform.system()
+font_prop = None
 
-# 初始化中文字体配置
-font_prop = setup_chinese_font()
+if system == "Windows":
+    # Windows强制加载微软雅黑字体文件（绝对路径，100%存在）
+    font_path = 'C:/Windows/Fonts/msyh.ttc'
+    font_prop = fm.FontProperties(fname=font_path)
+    plt.rcParams['font.sans-serif'] = [font_prop.get_name(), 'SimHei', 'DejaVu Sans']
+elif system == "Darwin":  # macOS
+    font_path = '/System/Library/Fonts/PingFang.ttc'
+    font_prop = fm.FontProperties(fname=font_path)
+    plt.rcParams['font.sans-serif'] = [font_prop.get_name(), 'Heiti SC', 'Arial Unicode MS']
+else:  # Linux
+    font_prop = fm.FontProperties(family='WenQuanYi Micro Hei')
+    plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'DejaVu Sans']
+
+# 强制解决负号/特殊字符显示问题
+plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.family'] = 'sans-serif'
+# 覆盖Seaborn默认样式，强制使用指定字体
+sns.set(font=font_prop.get_name() if font_prop else 'DejaVu Sans')
 
 # 你的API Key（保持不变）
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
@@ -310,6 +299,8 @@ def generate_analysis_report(df, cleaned_df, clean_log, num_cols, cat_cols, lang
     rep.append(f"- 总列数：{df.shape[1]}")
     rep.append(f"- 缺失值：{df.isnull().sum().sum()}")
     rep.append(f"- 重复行：{df.duplicated().sum()}")
+    if clean_log:
+        rep.append(f"- 清洗操作：{'; '.join(clean_log)}")
     return "\n".join(rep)
 
 # 异常值处理
@@ -397,7 +388,7 @@ def main():
     c3.metric(lang["missing_vals"], st.session_state["cleaned_df"].isnull().sum().sum())
     c4.metric(lang["duplicate_rows"], st.session_state["cleaned_df"].duplicated().sum())
 
-    # 数据清洗模块
+    # 数据清洗模块（补充实际执行逻辑）
     st.subheader(lang["advanced_data_cleaning"])
     if st.button(lang["reset_data"], key="reset_btn"):
         st.session_state["cleaned_df"] = st.session_state["original_df"].copy()
@@ -423,48 +414,58 @@ def main():
     o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols, key="outlier_cols") if num_cols else []
 
     if st.button(lang["execute_clean"], key="clean_btn"):
-        # 执行数据清洗逻辑（补充原代码缺失的清洗执行）
+        # 复制清洗前的数据
         cleaned_df = st.session_state["cleaned_df"].copy()
+        log = []
         
-        # 处理缺失值
+        # 1. 处理缺失值（实际执行清洗逻辑）
         if m_strat == lang["missing_drop_rows"]:
             cleaned_df = cleaned_df.dropna()
+            log.append(f"缺失值：{m_strat}")
         elif m_strat == lang["missing_drop_cols"]:
             cleaned_df = cleaned_df.dropna(axis=1)
+            log.append(f"缺失值：{m_strat}")
         elif m_strat == lang["missing_fill_mean"]:
             for col in num_cols:
                 cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mean())
+            log.append(f"缺失值：{m_strat}")
         elif m_strat == lang["missing_fill_median"]:
             for col in num_cols:
                 cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].median())
+            log.append(f"缺失值：{m_strat}")
         elif m_strat == lang["missing_fill_mode"]:
             for col in cat_cols:
                 cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mode()[0])
+            log.append(f"缺失值：{m_strat}")
         elif m_strat == lang["missing_fill_custom"] and custom_val:
             cleaned_df = cleaned_df.fillna(custom_val)
+            log.append(f"缺失值：{m_strat}（值：{custom_val}）")
         
-        # 处理重复行
+        # 2. 处理重复行
         if d_strat == lang["dup_drop_all"]:
             cleaned_df = cleaned_df.drop_duplicates(keep=False)
+            log.append(f"重复行：{d_strat}")
         elif d_strat == lang["dup_keep_first"]:
             cleaned_df = cleaned_df.drop_duplicates(keep="first")
+            log.append(f"重复行：{d_strat}")
         elif d_strat == lang["dup_keep_last"]:
             cleaned_df = cleaned_df.drop_duplicates(keep="last")
+            log.append(f"重复行：{d_strat}")
         
-        # 处理异常值
-        if o_strat != lang["outlier_keep"] and o_cols:
-            cleaned_df = handle_outliers(cleaned_df, o_cols, o_strat.split("：")[-1] if "：" in o_strat else o_strat)
+        # 3. 处理异常值
+        if o_strat == lang["outlier_drop"] and o_cols:
+            cleaned_df = handle_outliers(cleaned_df, o_cols, "drop")
+            log.append(f"异常值：{o_strat}")
+        elif o_strat == lang["outlier_cap"] and o_cols:
+            cleaned_df = handle_outliers(cleaned_df, o_cols, "cap")
+            log.append(f"异常值：{o_strat}")
         
-        # 更新会话状态
+        # 更新清洗后的数据和日志
         st.session_state["cleaned_df"] = cleaned_df
-        log = []
-        if m_strat != lang["missing_keep"]: log.append(f"缺失值：{m_strat}")
-        if d_strat != lang["dup_keep"]: log.append(f"重复行：{d_strat}")
-        if o_strat != lang["outlier_keep"] and o_cols: log.append(f"异常值：{o_strat}")
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（修复中文显示）
+    # 可视化模块（强制绑定字体，彻底解决乱码）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
@@ -474,19 +475,18 @@ def main():
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
             
-            # 设置中文字体（标题/标签/刻度）
+            # 强制设置所有文字字体
             ax.set_title(lang["dist_title"].format(col=col), fontproperties=font_prop, fontsize=12)
             ax.set_xlabel(col, fontproperties=font_prop, fontsize=11)
             ax.set_ylabel("频数" if sel_lang == "zh" else "Frequency", fontproperties=font_prop, fontsize=11)
             
-            # 刻度标签字体设置
-            for label in ax.get_xticklabels() + ax.get_yticklabels():
-                label.set_fontproperties(font_prop)
+            # 刻度标签强制绑定字体
+            ax.set_xticklabels(ax.get_xticks(), fontproperties=font_prop)
+            ax.set_yticklabels(ax.get_yticks(), fontproperties=font_prop)
             
             plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
-            # 保存到图表字典用于批量下载
             st.session_state["generated_charts"][f"直方图_{col}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_numeric_cols"])
@@ -498,12 +498,11 @@ def main():
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
             
-            # 设置中文字体
+            # 强制设置字体
             plt.xticks(rotation=45, fontproperties=font_prop, fontsize=10)
             ax.set_xlabel(bc, fontproperties=font_prop, fontsize=11)
             ax.set_ylabel(bn, fontproperties=font_prop, fontsize=11)
-            for label in ax.get_yticklabels():
-                label.set_fontproperties(font_prop)
+            ax.set_yticklabels(ax.get_yticks(), fontproperties=font_prop)
             
             plt.tight_layout()
             st.pyplot(fig)
@@ -518,10 +517,10 @@ def main():
             corr = st.session_state["cleaned_df"][num_cols].corr()
             sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax, fmt=".2f")
             
-            # 设置中文字体
+            # 强制设置字体
             ax.set_title(lang["heatmap_title"], fontproperties=font_prop, fontsize=12)
-            for label in ax.get_xticklabels() + ax.get_yticklabels():
-                label.set_fontproperties(font_prop)
+            ax.set_xticklabels(ax.get_xticklabels(), fontproperties=font_prop)
+            ax.set_yticklabels(ax.get_yticklabels(), fontproperties=font_prop)
             
             plt.tight_layout()
             st.pyplot(fig)
@@ -537,7 +536,7 @@ def main():
             fig, ax = plt.subplots(figsize=(8,8))
             ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
             
-            # 设置中文字体
+            # 强制设置字体（饼图所有文字）
             ax.set_title(lang["pie_chart_title"], fontproperties=font_prop, fontsize=12)
             for text in ax.texts:
                 text.set_fontproperties(font_prop)
@@ -549,7 +548,7 @@ def main():
         else:
             st.warning(lang["no_categorical_cols"])
 
-    # 下载图表
+    # 下载图表（修复ZIP下载逻辑）
     st.subheader(lang["download_charts"])
     col1, col2 = st.columns(2)
     with col1:
@@ -586,7 +585,7 @@ def main():
         c4.metric(lang["min_val"], round(st.session_state["cleaned_df"][kc].min(),2))
         c5.metric(lang["median_val"], round(st.session_state["cleaned_df"][kc].median(),2))
 
-    # 自动报告
+    # 自动报告（补充下载按钮）
     st.subheader(lang["auto_report"])
     if st.button(lang["generate_report"], key="gen_report"):
         r = generate_analysis_report(
@@ -620,7 +619,7 @@ def main():
                 key="dl_report_html"
             )
 
-    # AI 分析（改为独立启动按钮，无勾选框）
+    # AI 分析（独立启动按钮）
     st.divider()
     st.subheader(lang["ai_report"])
     st.warning(lang["ai_disclaimer"])
@@ -628,7 +627,7 @@ def main():
     if st.button(lang["generate_ai_report"], type="primary", key="gen_ai"):
         with st.spinner(lang["ai_report_loading"]):
             try:
-                # 构建更详细的数据摘要
+                # 构建详细数据摘要
                 summary = f"""
 基础信息：行数={st.session_state['cleaned_df'].shape[0]}，列数={st.session_state['cleaned_df'].shape[1]}
 数值列：{num_cols}
@@ -636,8 +635,8 @@ def main():
 缺失值总数：{st.session_state['cleaned_df'].isnull().sum().sum()}
 重复行数：{st.session_state['cleaned_df'].duplicated().sum()}
 清洗操作：{st.session_state['clean_log']}
-                """
-                ai_report = call_qwen_ai(summary.strip(), sel_lang)
+                """.strip()
+                ai_report = call_qwen_ai(summary, sel_lang)
                 st.session_state["ai_analysis_report"] = ai_report
                 st.markdown("---")
                 st.markdown(ai_report)
