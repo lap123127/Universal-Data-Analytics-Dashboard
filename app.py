@@ -12,9 +12,14 @@ import warnings
 import requests
 import json
 
+# 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.family'] = 'sans-serif'
 
-# ===================== 多语言配置 =====================
+# 你的API Key
+API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
 LANG_CONFIG = {
     "en": {
         "page_title": "Universal Data Visualization Dashboard",
@@ -32,9 +37,8 @@ LANG_CONFIG = {
         "feature_7": "Chart export as PNG",
         "feature_8": "Automatic analysis report",
         "feature_9": "Download all charts as ZIP",
-        "feature_10": "AI-powered analysis (300 words)",
-        "ai_disclaimer": "⚠️ Disclaimer: AI-generated content is for reference only. We are not responsible for the results.",
-        "ai_switch_label": "Enable AI Analysis",
+        "feature_10": "AI-powered analysis (300 words max)",
+        "ai_disclaimer": "⚠️ Disclaimer: AI-generated content is for reference only.",
         "sidebar_upload": "File Upload",
         "upload_label": "Upload CSV/Excel file",
         "upload_success": "File uploaded successfully!",
@@ -100,20 +104,18 @@ LANG_CONFIG = {
         "zip_filename": "charts_{time}.zip",
         "download_zip": "Download ZIP",
         "download_cleaned_data": "Download Cleaned Data",
-        "generate_cleaned_data": "Generate File",
         "download_cleaned_csv": "Download CSV",
         "download_cleaned_excel": "Download Excel",
         "auto_report": "Automatic Report",
         "generate_report": "Generate Report",
-        "ai_report": "AI Analysis (300 words)",
-        "generate_ai_report": "Generate AI Report",
+        "ai_report": "AI Analysis (300 words max)",
+        "generate_ai_report": "🚀 Start AI Analysis",
         "ai_report_loading": "Generating AI report...",
         "ai_report_error": "Failed: {e}",
         "report_download": "Download Report",
         "download_md": "Download MD",
         "download_html": "Download HTML",
         "report_title": "Analysis Report",
-        "ai_report_title": "AI Analysis Report",
         "report_generated": "Generated at: {time}",
         "no_numeric_cols": "No numeric columns found!",
         "no_categorical_cols": "No categorical columns found!"
@@ -136,7 +138,6 @@ LANG_CONFIG = {
         "feature_9": "一键下载所有图表为ZIP",
         "feature_10": "AI 智能数据分析（300字内）",
         "ai_disclaimer": "⚠️ 免责声明：AI 生成内容仅供参考，本工具不承担任何责任。",
-        "ai_switch_label": "启用 AI 数据分析",
         "sidebar_upload": "文件上传",
         "upload_label": "上传CSV/Excel文件",
         "upload_success": "文件上传成功！",
@@ -202,54 +203,45 @@ LANG_CONFIG = {
         "zip_filename": "图表_{time}.zip",
         "download_zip": "下载ZIP",
         "download_cleaned_data": "下载清洗后数据",
-        "generate_cleaned_data": "生成文件",
         "download_cleaned_csv": "下载CSV",
         "download_cleaned_excel": "下载Excel",
         "auto_report": "自动分析报告",
         "generate_report": "生成报告",
         "ai_report": "AI 分析报告（300字内）",
-        "generate_ai_report": "生成 AI 报告",
+        "generate_ai_report": "🚀 启动 AI 分析",
         "ai_report_loading": "正在生成 AI 报告...",
         "ai_report_error": "生成失败：{e}",
         "report_download": "下载报告",
         "download_md": "下载MD报告",
         "download_html": "下载HTML报告",
         "report_title": "数据分析报告",
-        "ai_report_title": "AI 数据分析报告",
         "report_generated": "报告生成时间：{time}",
         "no_numeric_cols": "未找到数值列！",
         "no_categorical_cols": "未找到分类列！"
     }
 }
+# 过滤无用ID列：user_id/id/编号/序号
+def get_valid_columns(df):
+    exclude_keywords = ["id", "userid", "user_id", "uuid", "no", "num", "number", "index", "编号", "序号"]
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    valid_num_cols = [col for col in numeric_cols if not any(k in str(col).lower() for k in exclude_keywords)]
+    valid_cat_cols = [col for col in cat_cols if not any(k in str(col).lower() for k in exclude_keywords)]
+    return valid_num_cols, valid_cat_cols
 
-# ===================== 已填入你的 API Key =====================
-API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
-
-# ===================== AI 调用函数 =====================
+# AI调用函数
 def call_qwen_ai(data_summary, lang="zh"):
     url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     if lang == "zh":
-        prompt = f"""
-你是数据分析师，根据以下数据生成**300字以内**精简分析报告：
+        prompt = f"""你是数据分析师，根据以下数据生成**300字以内**精简分析报告：
 1.数据概况 2.核心指标 3.关键发现 4.简短建议
-数据：{data_summary}
-"""
+数据：{data_summary}"""
     else:
-        prompt = f"""
-As data analyst, write a report within 300 words:
+        prompt = f"""As data analyst, write a report within 300 words:
 1.Overview 2.Metrics 3.Insights 4.Suggestions
-Data: {data_summary}
-"""
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "qwen3.6-flash",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": 450
-    }
+Data: {data_summary}"""
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    payload = {"model": "qwen3.6-flash", "messages": [{"role": "user", "content": prompt}], "temperature": 0.7, "max_tokens": 450}
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=25)
         resp.raise_for_status()
@@ -257,40 +249,24 @@ Data: {data_summary}
     except Exception as e:
         raise Exception(str(e))
 
-# ===================== 数据摘要生成 =====================
-def generate_data_summary(df, original_df, clean_log, num_cols, cat_cols, lang):
-    s = []
-    if lang == "zh":
-        s.append(f"行数：{df.shape[0]}，列数：{df.shape[1]}")
-        s.append(f"数值列：{len(num_cols)}，分类列：{len(cat_cols)}")
-        if num_cols:
-            c = num_cols[0]
-            s.append(f"{c} 均值：{round(df[c].mean(),2)}，最大：{round(df[c].max(),2)}，最小：{round(df[c].min(),2)}")
-    else:
-        s.append(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
-        s.append(f"Numeric: {len(num_cols)}, Categorical: {len(cat_cols)}")
-        if num_cols:
-            c = num_cols[0]
-            s.append(f"{c} mean: {round(df[c].mean(),2)}, max: {round(df[c].max(),2)}, min: {round(df[c].min(),2)}")
-    return " | ".join(s)
-
-# ===================== 图表工具函数 =====================
-def save_plot_to_bytes(fig, dpi=300):
+# 保存图表
+def save_plot_to_bytes(fig, dpi=150):
     buf = BytesIO()
     fig.savefig(buf, format='png', dpi=dpi, bbox_inches='tight')
     buf.seek(0)
     return buf
 
+# 打包图表为ZIP
 def create_charts_zip(charts_dict):
     zip_buf = BytesIO()
     with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for name, buf in charts_dict.items():
-            safe = name.replace('/', '_').replace('\\', '_').replace(':', '_')
-            zipf.writestr(f"{safe}.png", buf.getvalue())
+            safe_name = name.replace('/', '_').replace('\\', '_').replace(':', '_')
+            zipf.writestr(f"{safe_name}.png", buf.getvalue())
     zip_buf.seek(0)
     return zip_buf
 
-# ===================== 基础报告生成 =====================
+# 生成基础文本报告
 def generate_analysis_report(df, cleaned_df, clean_log, num_cols, cat_cols, lang):
     t = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rep = [f"# {lang['report_title']}", f"*{lang['report_generated'].format(time=t)}*"]
@@ -300,63 +276,52 @@ def generate_analysis_report(df, cleaned_df, clean_log, num_cols, cat_cols, lang
     rep.append(f"- 重复行：{df.duplicated().sum()}")
     return "\n".join(rep)
 
-# ===================== 异常值处理 =====================
+# 异常值处理
 def handle_outliers(df, cols, strategy):
     cdf = df.copy()
-    for c in cols:
-        if c not in cdf.select_dtypes(include=[np.number]).columns:
+    for col in cols:
+        if col not in cdf.select_dtypes(include=[np.number]).columns:
             continue
-        q1, q3 = cdf[c].quantile([0.25, 0.75])
+        q1, q3 = cdf[col].quantile([0.25, 0.75])
         iqr = q3 - q1
         if strategy == "drop":
-            cdf = cdf[(cdf[c] >= q1-1.5*iqr) & (cdf[c] <= q3+1.5*iqr)]
+            cdf = cdf[(cdf[col] >= q1-1.5*iqr) & (cdf[col] <= q3+1.5*iqr)]
         elif strategy == "cap":
-            cdf[c] = np.clip(cdf[c], q1-1.5*iqr, q3+1.5*iqr)
+            cdf[col] = np.clip(cdf[col], q1-1.5*iqr, q3+1.5*iqr)
     return cdf
-
-# ===================== 主程序 =====================
 def main():
     st.set_page_config(page_title="Dashboard", layout="wide")
     
-    if "original_df" not in st.session_state:
-        st.session_state["original_df"] = None
-    if "cleaned_df" not in st.session_state:
-        st.session_state["cleaned_df"] = None
-    if "clean_log" not in st.session_state:
-        st.session_state["clean_log"] = []
-    if "analysis_report" not in st.session_state:
-        st.session_state["analysis_report"] = ""
-    if "ai_analysis_report" not in st.session_state:
-        st.session_state["ai_analysis_report"] = ""
-    if "generated_charts" not in st.session_state:
-        st.session_state["generated_charts"] = {}
-    if "last_chart_buf" not in st.session_state:
-        st.session_state["last_chart_buf"] = None
+    # 初始化会话状态
+    if "original_df" not in st.session_state: st.session_state["original_df"] = None
+    if "cleaned_df" not in st.session_state: st.session_state["cleaned_df"] = None
+    if "clean_log" not in st.session_state: st.session_state["clean_log"] = []
+    if "analysis_report" not in st.session_state: st.session_state["analysis_report"] = ""
+    if "ai_analysis_report" not in st.session_state: st.session_state["ai_analysis_report"] = ""
+    if "generated_charts" not in st.session_state: st.session_state["generated_charts"] = {}
+    if "last_chart_buf" not in st.session_state: st.session_state["last_chart_buf"] = None
 
+    # 语言选择
     st.sidebar.header("🌐 Language")
     sel_lang = st.sidebar.radio("", ["zh", "en"], format_func=lambda x: "中文" if x == "zh" else "English", key="lang_radio")
     lang = LANG_CONFIG[sel_lang]
 
-    # ===================== 【新增】AI 分析开关 =====================
-    st.sidebar.markdown("---")
-    enable_ai = st.sidebar.checkbox(lang["ai_switch_label"], value=True, key="ai_switch")
-
-    plt.rcParams['font.sans-serif'] = ['SimHei'] if sel_lang == "zh" else ['DejaVu Sans']
-    plt.rcParams['axes.unicode_minus'] = False
     st.title(lang["main_title"])
     st.markdown(lang["main_desc"])
 
+    # 功能列表
     st.subheader(lang["supported_features"])
     for i in range(1, 11):
         st.markdown(f"✅ {lang[f'feature_{i}']}")
 
+    # 文件上传
     st.sidebar.header(lang["sidebar_upload"])
     file = st.sidebar.file_uploader(lang["upload_label"], type=["csv", "xlsx"], key="file_uploader")
-
     if not file:
         st.info(lang["initial_prompt"])
         return
 
+    # 读取文件
     try:
         if file.name.endswith(".csv"):
             df = pd.read_csv(file)
@@ -369,18 +334,21 @@ def main():
         st.error(lang["upload_error"].format(e=e))
         return
 
-    cat_cols = df.select_dtypes(include=[object, "category"]).columns.tolist()
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    # 过滤ID列
+    num_cols, cat_cols = get_valid_columns(st.session_state["cleaned_df"])
 
+    # 基础筛选
     st.sidebar.subheader(lang["basic_filters"])
     if cat_cols:
         sc = st.sidebar.selectbox(lang["filter_cat_col"], cat_cols, key="filter_cat")
-        vs = st.sidebar.multiselect(lang["filter_keep_vals"], df[sc].unique(), default=list(df[sc].unique()), key="filter_vals")
+        vs = st.sidebar.multiselect(lang["filter_keep_vals"], st.session_state["cleaned_df"][sc].unique(), default=list(st.session_state["cleaned_df"][sc].unique()), key="filter_vals")
         st.session_state["cleaned_df"] = st.session_state["cleaned_df"][st.session_state["cleaned_df"][sc].isin(vs)]
 
+    # 数据预览
     st.subheader(lang["data_preview"])
     st.dataframe(st.session_state["cleaned_df"].head(8), use_container_width=True)
 
+    # 数据概览
     st.subheader(lang["data_overview"])
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(lang["total_rows"], st.session_state["cleaned_df"].shape[0])
@@ -388,6 +356,7 @@ def main():
     c3.metric(lang["missing_vals"], st.session_state["cleaned_df"].isnull().sum().sum())
     c4.metric(lang["duplicate_rows"], st.session_state["cleaned_df"].duplicated().sum())
 
+    # 数据清洗模块
     st.subheader(lang["advanced_data_cleaning"])
     if st.button(lang["reset_data"], key="reset_btn"):
         st.session_state["cleaned_df"] = st.session_state["original_df"].copy()
@@ -414,15 +383,13 @@ def main():
 
     if st.button(lang["execute_clean"], key="clean_btn"):
         log = []
-        if m_strat != lang["missing_keep"]:
-            log.append(f"缺失值：{m_strat}")
-        if d_strat != lang["dup_keep"]:
-            log.append(f"重复行：{d_strat}")
-        if o_strat != lang["outlier_keep"] and o_cols:
-            log.append(f"异常值：{o_strat}")
+        if m_strat != lang["missing_keep"]: log.append(f"缺失值：{m_strat}")
+        if d_strat != lang["dup_keep"]: log.append(f"重复行：{d_strat}")
+        if o_strat != lang["outlier_keep"] and o_cols: log.append(f"异常值：{o_strat}")
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
+    # 可视化模块（修复热力图+饼图）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
@@ -452,7 +419,7 @@ def main():
     with t3:
         if len(num_cols)>=2:
             fig, ax = plt.subplots(figsize=(10,6))
-            sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm")
+            sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f")
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
@@ -461,23 +428,15 @@ def main():
     with t4:
         if cat_cols:
             pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
+            cnt = st.session_state["cleaned_df"][pc].value_counts()
             fig, ax = plt.subplots(figsize=(8,8))
-            ax.pie(st.session_state["cleaned_df"][pc].value_counts(), labels=st.session_state["cleaned_df"][pc].unique(), autopct="%1.1f%%")
+            ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
         else:
             st.warning(lang["no_categorical_cols"])
 
-    st.subheader(lang["key_metrics"])
-    if num_cols:
-        kc = st.selectbox(lang["key_col_select"], num_cols, key="metric_unique")
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric(lang["total_records"], st.session_state["cleaned_df"][kc].count())
-        c2.metric(lang["mean_val"], round(st.session_state["cleaned_df"][kc].mean(),2))
-        c3.metric(lang["max_val"], round(st.session_state["cleaned_df"][kc].max(),2))
-        c4.metric(lang["min_val"], round(st.session_state["cleaned_df"][kc].min(),2))
-        c5.metric(lang["median_val"], round(st.session_state["cleaned_df"][kc].median(),2))
-
+    # 下载图表
     st.subheader(lang["download_charts"])
     col1, col2 = st.columns(2)
     with col1:
@@ -488,35 +447,49 @@ def main():
             z = create_charts_zip(st.session_state["generated_charts"])
             st.download_button(lang["download_zip"], z, lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S")), "application/zip", key="dl_zip")
 
+    # 关键指标
+    st.subheader(lang["key_metrics"])
+    if num_cols:
+        kc = st.selectbox(lang["key_col_select"], num_cols, key="metric_unique")
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric(lang["total_records"], st.session_state["cleaned_df"][kc].count())
+        c2.metric(lang["mean_val"], round(st.session_state["cleaned_df"][kc].mean(),2))
+        c3.metric(lang["max_val"], round(st.session_state["cleaned_df"][kc].max(),2))
+        c4.metric(lang["min_val"], round(st.session_state["cleaned_df"][kc].min(),2))
+        c5.metric(lang["median_val"], round(st.session_state["cleaned_df"][kc].median(),2))
+
+    # 自动报告
     st.subheader(lang["auto_report"])
     if st.button(lang["generate_report"], key="gen_report"):
         r = generate_analysis_report(st.session_state["original_df"], st.session_state["cleaned_df"], st.session_state["clean_log"], num_cols, cat_cols, lang)
         st.session_state["analysis_report"] = r
         st.markdown(r)
 
-    # ===================== 【受控开关】AI 分析区域 =====================
-    if enable_ai:
-        st.subheader(lang["ai_report"])
-        st.warning(lang["ai_disclaimer"])
+    # AI 分析（改为独立启动按钮，无勾选框）
+    st.divider()
+    st.subheader(lang["ai_report"])
+    st.warning(lang["ai_disclaimer"])
 
-        if st.button(lang["generate_ai_report"], key="gen_ai"):
-            with st.spinner(lang["ai_report_loading"]):
-                try:
-                    s = generate_data_summary(st.session_state["cleaned_df"], st.session_state["original_df"], st.session_state["clean_log"], num_cols, cat_cols, sel_lang)
-                    ai = call_qwen_ai(s, sel_lang)
-                    st.session_state["ai_analysis_report"] = ai
-                    st.markdown(ai)
-                except Exception as e:
-                    st.error(lang["ai_report_error"].format(e=str(e)))
+    if st.button(lang["generate_ai_report"], type="primary", key="gen_ai"):
+        with st.spinner(lang["ai_report_loading"]):
+            try:
+                summary = f"行数：{st.session_state['cleaned_df'].shape[0]}，列数：{st.session_state['cleaned_df'].shape[1]}，有效数值列：{num_cols}，分类列：{cat_cols}"
+                ai_report = call_qwen_ai(summary, sel_lang)
+                st.session_state["ai_analysis_report"] = ai_report
+                st.markdown("---")
+                st.markdown(ai_report)
+            except Exception as e:
+                st.error(lang["ai_report_error"].format(e=str(e)))
 
-        if st.session_state["ai_analysis_report"]:
-            st.markdown("---")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(lang["download_md"], st.session_state["ai_analysis_report"], "ai_report.md", key="dl_md")
-            with col2:
-                html = markdown.markdown(st.session_state["ai_analysis_report"])
-                st.download_button(lang["download_html"], html, "ai_report.html", key="dl_html")
+    # 下载AI报告
+    if st.session_state["ai_analysis_report"]:
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(lang["download_md"], st.session_state["ai_analysis_report"], "ai_report.md", key="dl_md")
+        with col2:
+            html = markdown.markdown(st.session_state["ai_analysis_report"])
+            st.download_button(lang["download_html"], html, "ai_report.html", key="dl_html")
 
 if __name__ == "__main__":
     main()
