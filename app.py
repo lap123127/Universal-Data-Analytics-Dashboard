@@ -34,7 +34,7 @@ LANG_CONFIG = {
         "feature_9": "Download all charts as ZIP",
         "feature_10": "AI-powered analysis (300 words)",
         "ai_disclaimer": "⚠️ Disclaimer: AI-generated content is for reference only. We are not responsible for the results.",
-
+        "ai_switch_label": "Enable AI Analysis",
         "sidebar_upload": "File Upload",
         "upload_label": "Upload CSV/Excel file",
         "upload_success": "File uploaded successfully!",
@@ -136,7 +136,7 @@ LANG_CONFIG = {
         "feature_9": "一键下载所有图表为ZIP",
         "feature_10": "AI 智能数据分析（300字内）",
         "ai_disclaimer": "⚠️ 免责声明：AI 生成内容仅供参考，本工具不承担任何责任。",
-
+        "ai_switch_label": "启用 AI 数据分析",
         "sidebar_upload": "文件上传",
         "upload_label": "上传CSV/Excel文件",
         "upload_success": "文件上传成功！",
@@ -334,8 +334,12 @@ def main():
         st.session_state["last_chart_buf"] = None
 
     st.sidebar.header("🌐 Language")
-    sel_lang = st.sidebar.radio("", ["zh", "en"], format_func=lambda x: "中文" if x == "zh" else "English")
+    sel_lang = st.sidebar.radio("", ["zh", "en"], format_func=lambda x: "中文" if x == "zh" else "English", key="lang_radio")
     lang = LANG_CONFIG[sel_lang]
+
+    # ===================== 【新增】AI 分析开关 =====================
+    st.sidebar.markdown("---")
+    enable_ai = st.sidebar.checkbox(lang["ai_switch_label"], value=True, key="ai_switch")
 
     plt.rcParams['font.sans-serif'] = ['SimHei'] if sel_lang == "zh" else ['DejaVu Sans']
     plt.rcParams['axes.unicode_minus'] = False
@@ -347,7 +351,7 @@ def main():
         st.markdown(f"✅ {lang[f'feature_{i}']}")
 
     st.sidebar.header(lang["sidebar_upload"])
-    file = st.sidebar.file_uploader(lang["upload_label"], type=["csv", "xlsx"])
+    file = st.sidebar.file_uploader(lang["upload_label"], type=["csv", "xlsx"], key="file_uploader")
 
     if not file:
         st.info(lang["initial_prompt"])
@@ -370,8 +374,8 @@ def main():
 
     st.sidebar.subheader(lang["basic_filters"])
     if cat_cols:
-        sc = st.sidebar.selectbox(lang["filter_cat_col"], cat_cols)
-        vs = st.sidebar.multiselect(lang["filter_keep_vals"], df[sc].unique(), default=list(df[sc].unique()))
+        sc = st.sidebar.selectbox(lang["filter_cat_col"], cat_cols, key="filter_cat")
+        vs = st.sidebar.multiselect(lang["filter_keep_vals"], df[sc].unique(), default=list(df[sc].unique()), key="filter_vals")
         st.session_state["cleaned_df"] = st.session_state["cleaned_df"][st.session_state["cleaned_df"][sc].isin(vs)]
 
     st.subheader(lang["data_preview"])
@@ -385,7 +389,7 @@ def main():
     c4.metric(lang["duplicate_rows"], st.session_state["cleaned_df"].duplicated().sum())
 
     st.subheader(lang["advanced_data_cleaning"])
-    if st.button(lang["reset_data"]):
+    if st.button(lang["reset_data"], key="reset_btn"):
         st.session_state["cleaned_df"] = st.session_state["original_df"].copy()
         st.session_state["clean_log"] = []
         st.success(lang["reset_success"])
@@ -394,21 +398,21 @@ def main():
     m_strat = st.selectbox(lang["missing_strategy_label"], [
         lang["missing_keep"], lang["missing_drop_rows"], lang["missing_drop_cols"],
         lang["missing_fill_mean"], lang["missing_fill_median"], lang["missing_fill_mode"], lang["missing_fill_custom"]
-    ])
-    custom_val = st.text_input(lang["custom_fill_tip"]) if m_strat == lang["missing_fill_custom"] else None
+    ], key="missing_strat")
+    custom_val = st.text_input(lang["custom_fill_tip"], key="custom_fill") if m_strat == lang["missing_fill_custom"] else None
 
     st.markdown(f"### {lang['step2_dup_title']}")
     d_strat = st.selectbox(lang["dup_strategy_label"], [
         lang["dup_keep"], lang["dup_drop_all"], lang["dup_keep_first"], lang["dup_keep_last"]
-    ])
+    ], key="dup_strat")
 
     st.markdown(f"### {lang['step3_outlier_title']}")
     o_strat = st.selectbox(lang["outlier_strategy_label"], [
         lang["outlier_keep"], lang["outlier_drop"], lang["outlier_cap"]
-    ])
-    o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols) if num_cols else []
+    ], key="outlier_strat")
+    o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols, key="outlier_cols") if num_cols else []
 
-    if st.button(lang["execute_clean"]):
+    if st.button(lang["execute_clean"], key="clean_btn"):
         log = []
         if m_strat != lang["missing_keep"]:
             log.append(f"缺失值：{m_strat}")
@@ -424,7 +428,7 @@ def main():
 
     with t1:
         if num_cols:
-            col = st.selectbox(lang["histogram_select"], num_cols)
+            col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
             ax.set_title(lang["dist_title"].format(col=col))
@@ -435,8 +439,8 @@ def main():
 
     with t2:
         if cat_cols and num_cols:
-            bc = st.selectbox(lang["bar_cat_select"], cat_cols)
-            bn = st.selectbox(lang["bar_num_select"], num_cols)
+            bc = st.selectbox(lang["bar_cat_select"], cat_cols, key="bar_cat_unique")
+            bn = st.selectbox(lang["bar_num_select"], num_cols, key="bar_num_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
             plt.xticks(rotation=45)
@@ -456,7 +460,7 @@ def main():
 
     with t4:
         if cat_cols:
-            pc = st.selectbox(lang["pie_bar_select"], cat_cols)
+            pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
             fig, ax = plt.subplots(figsize=(8,8))
             ax.pie(st.session_state["cleaned_df"][pc].value_counts(), labels=st.session_state["cleaned_df"][pc].unique(), autopct="%1.1f%%")
             st.pyplot(fig)
@@ -466,7 +470,7 @@ def main():
 
     st.subheader(lang["key_metrics"])
     if num_cols:
-        kc = st.selectbox(lang["key_col_select"], num_cols)
+        kc = st.selectbox(lang["key_col_select"], num_cols, key="metric_unique")
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric(lang["total_records"], st.session_state["cleaned_df"][kc].count())
         c2.metric(lang["mean_val"], round(st.session_state["cleaned_df"][kc].mean(),2))
@@ -478,39 +482,41 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         if st.session_state["last_chart_buf"]:
-            st.download_button(lang["download_png"], st.session_state["last_chart_buf"], "chart.png", "image/png")
+            st.download_button(lang["download_png"], st.session_state["last_chart_buf"], "chart.png", "image/png", key="dl_png")
     with col2:
         if st.session_state["generated_charts"]:
             z = create_charts_zip(st.session_state["generated_charts"])
-            st.download_button(lang["download_zip"], z, lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S")), "application/zip")
+            st.download_button(lang["download_zip"], z, lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S")), "application/zip", key="dl_zip")
 
     st.subheader(lang["auto_report"])
-    if st.button(lang["generate_report"]):
+    if st.button(lang["generate_report"], key="gen_report"):
         r = generate_analysis_report(st.session_state["original_df"], st.session_state["cleaned_df"], st.session_state["clean_log"], num_cols, cat_cols, lang)
         st.session_state["analysis_report"] = r
         st.markdown(r)
 
-    st.subheader(lang["ai_report"])
-    st.warning(lang["ai_disclaimer"])
+    # ===================== 【受控开关】AI 分析区域 =====================
+    if enable_ai:
+        st.subheader(lang["ai_report"])
+        st.warning(lang["ai_disclaimer"])
 
-    if st.button(lang["generate_ai_report"]):
-        with st.spinner(lang["ai_report_loading"]):
-            try:
-                s = generate_data_summary(st.session_state["cleaned_df"], st.session_state["original_df"], st.session_state["clean_log"], num_cols, cat_cols, sel_lang)
-                ai = call_qwen_ai(s, sel_lang)
-                st.session_state["ai_analysis_report"] = ai
-                st.markdown(ai)
-            except Exception as e:
-                st.error(lang["ai_report_error"].format(e=str(e)))
+        if st.button(lang["generate_ai_report"], key="gen_ai"):
+            with st.spinner(lang["ai_report_loading"]):
+                try:
+                    s = generate_data_summary(st.session_state["cleaned_df"], st.session_state["original_df"], st.session_state["clean_log"], num_cols, cat_cols, sel_lang)
+                    ai = call_qwen_ai(s, sel_lang)
+                    st.session_state["ai_analysis_report"] = ai
+                    st.markdown(ai)
+                except Exception as e:
+                    st.error(lang["ai_report_error"].format(e=str(e)))
 
-    if st.session_state["ai_analysis_report"]:
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(lang["download_md"], st.session_state["ai_analysis_report"], "ai_report.md")
-        with col2:
-            html = markdown.markdown(st.session_state["ai_analysis_report"])
-            st.download_button(lang["download_html"], html, "ai_report.html")
+        if st.session_state["ai_analysis_report"]:
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(lang["download_md"], st.session_state["ai_analysis_report"], "ai_report.md", key="dl_md")
+            with col2:
+                html = markdown.markdown(st.session_state["ai_analysis_report"])
+                st.download_button(lang["download_html"], html, "ai_report.html", key="dl_html")
 
 if __name__ == "__main__":
     main()
