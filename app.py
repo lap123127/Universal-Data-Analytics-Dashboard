@@ -14,12 +14,14 @@ import json
 
 # 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
+# 极简字体配置（仅保证负号正常，中文完全由Streamlit层展示）
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.family'] = 'sans-serif'
 
-# 你的API Key
+# 你的API Key（请替换为自己的有效Key）
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
+
 LANG_CONFIG = {
     "en": {
         "page_title": "Universal Data Visualization Dashboard",
@@ -103,6 +105,7 @@ LANG_CONFIG = {
         "no_charts_to_download": "No charts yet.",
         "zip_filename": "charts_{time}.zip",
         "download_zip": "Download ZIP",
+        "zip_chart_count": "({count} charts in total)",
         "download_cleaned_data": "Download Cleaned Data",
         "download_cleaned_csv": "Download CSV",
         "download_cleaned_excel": "Download Excel",
@@ -119,7 +122,7 @@ LANG_CONFIG = {
         "report_generated": "Generated at: {time}",
         "no_numeric_cols": "No numeric columns found!",
         "no_categorical_cols": "No categorical columns found!",
-        "zip_chart_count": "({count} charts in total)"  # 新增：ZIP包内图表数量提示（英文）
+        "pie_category_note": "Category Note:"
     },
     "zh": {
         "page_title": "通用数据可视化分析仪表盘",
@@ -203,6 +206,7 @@ LANG_CONFIG = {
         "no_charts_to_download": "暂无生成图表。",
         "zip_filename": "图表_{time}.zip",
         "download_zip": "下载ZIP",
+        "zip_chart_count": "（共{count}张图表）",
         "download_cleaned_data": "下载清洗后数据",
         "download_cleaned_csv": "下载CSV",
         "download_cleaned_excel": "下载Excel",
@@ -219,9 +223,10 @@ LANG_CONFIG = {
         "report_generated": "报告生成时间：{time}",
         "no_numeric_cols": "未找到数值列！",
         "no_categorical_cols": "未找到分类列！",
-        "zip_chart_count": "（共{count}张图表）"  # 新增：ZIP包内图表数量提示（中文）
+        "pie_category_note": "分类说明："
     }
 }
+
 # 过滤无用ID列：user_id/id/编号/序号
 def get_valid_columns(df):
     exclude_keywords = ["id", "userid", "user_id", "uuid", "no", "num", "number", "index", "编号", "序号"]
@@ -276,6 +281,8 @@ def generate_analysis_report(df, cleaned_df, clean_log, num_cols, cat_cols, lang
     rep.append(f"- 总列数：{df.shape[1]}")
     rep.append(f"- 缺失值：{df.isnull().sum().sum()}")
     rep.append(f"- 重复行：{df.duplicated().sum()}")
+    if clean_log:
+        rep.append(f"- 清洗操作：{'; '.join(clean_log)}")
     return "\n".join(rep)
 
 # 异常值处理
@@ -291,6 +298,7 @@ def handle_outliers(df, cols, strategy):
         elif strategy == "cap":
             cdf[col] = np.clip(cdf[col], q1-1.5*iqr, q3+1.5*iqr)
     return cdf
+
 def main():
     st.set_page_config(page_title="Dashboard", layout="wide")
     
@@ -358,7 +366,7 @@ def main():
     c3.metric(lang["missing_vals"], st.session_state["cleaned_df"].isnull().sum().sum())
     c4.metric(lang["duplicate_rows"], st.session_state["cleaned_df"].duplicated().sum())
 
-    # 数据清洗模块
+    # 数据清洗模块（补充实际清洗逻辑）
     st.subheader(lang["advanced_data_cleaning"])
     if st.button(lang["reset_data"], key="reset_btn"):
         st.session_state["cleaned_df"] = st.session_state["original_df"].copy()
@@ -384,6 +392,42 @@ def main():
     o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols, key="outlier_cols") if num_cols else []
 
     if st.button(lang["execute_clean"], key="clean_btn"):
+        # 执行实际的数据清洗逻辑
+        cleaned_df = st.session_state["cleaned_df"].copy()
+        
+        # 处理缺失值
+        if m_strat == lang["missing_drop_rows"]:
+            cleaned_df = cleaned_df.dropna()
+        elif m_strat == lang["missing_drop_cols"]:
+            cleaned_df = cleaned_df.dropna(axis=1)
+        elif m_strat == lang["missing_fill_mean"]:
+            for col in cleaned_df.select_dtypes(include=[np.number]).columns:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mean())
+        elif m_strat == lang["missing_fill_median"]:
+            for col in cleaned_df.select_dtypes(include=[np.number]).columns:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].median())
+        elif m_strat == lang["missing_fill_mode"]:
+            for col in cleaned_df.select_dtypes(include=["object", "category"]).columns:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mode()[0])
+        elif m_strat == lang["missing_fill_custom"] and custom_val:
+            cleaned_df = cleaned_df.fillna(custom_val)
+        
+        # 处理重复行
+        if d_strat == lang["dup_drop_all"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep=False)
+        elif d_strat == lang["dup_keep_first"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep="first")
+        elif d_strat == lang["dup_keep_last"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep="last")
+        
+        # 处理异常值
+        if o_strat != lang["outlier_keep"] and o_cols:
+            cleaned_df = handle_outliers(cleaned_df, o_cols, o_strat)
+        
+        # 更新清洗后的数据
+        st.session_state["cleaned_df"] = cleaned_df
+        
+        # 记录清洗日志
         log = []
         if m_strat != lang["missing_keep"]: log.append(f"缺失值：{m_strat}")
         if d_strat != lang["dup_keep"]: log.append(f"重复行：{d_strat}")
@@ -391,19 +435,23 @@ def main():
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（修复热力图+饼图，同时完善generated_charts赋值）
+    # 可视化模块（核心修复：中文由Streamlit展示，Matplotlib只绘图）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
     with t1:
         if num_cols:
             col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
+            # 中文标题放在Streamlit层（原生支持中文，无字体问题）
+            st.markdown(f"#### {col} 分布情况")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
-            ax.set_title(lang["dist_title"].format(col=col))
+            # 清空Matplotlib的所有中文文本渲染
+            ax.set_title("")
+            ax.set_xlabel("")
+            ax.set_ylabel("")
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
-            # 关键修复：将生成的图表加入字典，用于统计数量
             st.session_state["generated_charts"][f"histogram_{col}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_numeric_cols"])
@@ -412,23 +460,31 @@ def main():
         if cat_cols and num_cols:
             bc = st.selectbox(lang["bar_cat_select"], cat_cols, key="bar_cat_unique")
             bn = st.selectbox(lang["bar_num_select"], num_cols, key="bar_num_unique")
+            # 中文标题放在Streamlit层
+            st.markdown(f"#### {bc} - {bn} 对比")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
+            # 清空Matplotlib的中文文本
+            ax.set_title("")
+            ax.set_xlabel("")
+            ax.set_ylabel("")
             plt.xticks(rotation=45)
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
-            # 关键修复：将生成的图表加入字典
             st.session_state["generated_charts"][f"bar_{bc}_{bn}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_categorical_cols"] if not cat_cols else lang["no_numeric_cols"])
 
     with t3:
         if len(num_cols)>=2:
+            # 中文标题放在Streamlit层
+            st.markdown(f"#### 数值列相关性热力图")
             fig, ax = plt.subplots(figsize=(10,6))
             sns.heatmap(st.session_state["cleaned_df"][num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f")
+            # 清空Matplotlib的中文标题
+            ax.set_title("")
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
-            # 关键修复：将生成的图表加入字典
             st.session_state["generated_charts"]["heatmap"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_numeric_cols"])
@@ -436,17 +492,23 @@ def main():
     with t4:
         if cat_cols:
             pc = st.selectbox(lang["pie_bar_select"], cat_cols, key="pie_unique")
+            # 中文标题放在Streamlit层
+            st.markdown(f"#### {pc} 占比分布")
             cnt = st.session_state["cleaned_df"][pc].value_counts()
             fig, ax = plt.subplots(figsize=(8,8))
-            ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
+            # 饼图不渲染中文标签，避免方块
+            ax.pie(cnt, labels=[""]*len(cnt), autopct="%1.1f%%")
+            # 在Streamlit层展示分类说明
+            st.markdown(f"**{lang['pie_category_note']}**")
+            for idx, val in enumerate(cnt.index):
+                st.markdown(f"- 区块{idx+1}：{val}（{cnt[val]}条）")
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
-            # 关键修复：将生成的图表加入字典
             st.session_state["generated_charts"][f"pie_{pc}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_categorical_cols"])
 
-    # 下载图表（核心修改：添加ZIP包内图表数量提示）
+    # 下载图表（修复ZIP下载功能+添加数量提示）
     st.subheader(lang["download_charts"])
     col1, col2 = st.columns(2)
     with col1:
@@ -489,7 +551,7 @@ def main():
         st.session_state["analysis_report"] = r
         st.markdown(r)
 
-    # AI 分析（改为独立启动按钮，无勾选框）
+    # AI 分析（独立启动按钮）
     st.divider()
     st.subheader(lang["ai_report"])
     st.warning(lang["ai_disclaimer"])
