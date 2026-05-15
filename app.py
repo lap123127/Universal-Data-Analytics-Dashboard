@@ -11,7 +11,11 @@ import base64
 import warnings
 import requests
 import json
-
+import matplotlib.font_manager as fm
+# 打印环境中所有可用字体
+fonts = [f.name for f in fm.FontManager.ttflist]
+chinese_fonts = [f for f in fonts if "SimHei" in f or "WenQuanYi" in f or "Hiragino" in f]
+print("环境中的中文字体列表：", chinese_fonts)
 # 屏蔽Matplotlib字体警告，适配云端部署
 warnings.filterwarnings('ignore')
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
