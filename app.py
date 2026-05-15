@@ -13,29 +13,45 @@ import requests
 import json
 import matplotlib.font_manager as fm
 import os
+import platform
 
-# 屏蔽Matplotlib字体警告，适配Windows系统中文显示（核心修复）
+# 屏蔽Matplotlib字体警告，适配多系统中文显示
 warnings.filterwarnings('ignore')
-# Windows系统强制绑定本地中文字体文件（微软雅黑/黑体二选一，确保存在）
-font_paths = [
-    'C:/Windows/Fonts/msyh.ttc',  # 微软雅黑（优先）
-    'C:/Windows/Fonts/simhei.ttf' # 黑体（兜底）
-]
-# 选择第一个存在的字体文件
-valid_font_path = None
-for path in font_paths:
-    if os.path.exists(path):
-        valid_font_path = path
-        break
 
-if valid_font_path:
-    # 显式加载字体文件
-    font_prop = fm.FontProperties(fname=valid_font_path)
-    plt.rcParams['font.family'] = font_prop.get_name()
-else:
-    # 兜底配置
-    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
-plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+# ========== 修复核心：多系统中文字体配置 ==========
+def setup_chinese_font():
+    """配置Matplotlib中文字体，兼容Windows/macOS/Linux"""
+    system = platform.system()
+    font_path = None
+    
+    # 定义各系统优先字体
+    font_names = []
+    if system == "Windows":
+        font_names = ["Microsoft YaHei", "SimHei", "Arial Unicode MS"]
+    elif system == "Darwin":  # macOS
+        font_names = ["PingFang SC", "Heiti SC", "Arial Unicode MS"]
+    elif system == "Linux":
+        font_names = ["WenQuanYi Micro Hei", "DejaVu Sans"]
+    
+    # 尝试加载系统字体
+    for font_name in font_names:
+        try:
+            # 检查字体是否存在
+            font_prop = fm.FontProperties(family=font_name)
+            # 测试字体是否可用
+            plt.rcParams['font.sans-serif'] = [font_name]
+            plt.rcParams['axes.unicode_minus'] = False
+            return font_prop
+        except:
+            continue
+    
+    # 兜底方案：使用默认字体+禁用中文检查（避免方块）
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
+    return fm.FontProperties(family='DejaVu Sans')
+
+# 初始化中文字体配置
+font_prop = setup_chinese_font()
 
 # 你的API Key（保持不变）
 API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
@@ -342,16 +358,16 @@ def main():
         st.info(lang["initial_prompt"])
         return
 
-    # 读取文件（强制GBK/UTF-8兼容）
+    # 读取文件（修复中文编码，兼容GBK/UTF-8）
     try:
         if file.name.endswith(".csv"):
-            # Windows优先GBK编码
+            # 优先GBK（Windows中文CSV），失败则UTF-8
             try:
                 df = pd.read_csv(file, encoding='gbk')
             except UnicodeDecodeError:
                 df = pd.read_csv(file, encoding='utf-8')
         else:
-            df = pd.read_excel(file, engine='openpyxl')
+            df = pd.read_excel(file, engine='openpyxl')  # Excel中文兼容
         st.session_state["original_df"] = df.copy()
         st.session_state["cleaned_df"] = df.copy()
         st.sidebar.success(lang["upload_success"])
@@ -407,6 +423,40 @@ def main():
     o_cols = st.multiselect(lang["outlier_cols_label"], num_cols, default=num_cols, key="outlier_cols") if num_cols else []
 
     if st.button(lang["execute_clean"], key="clean_btn"):
+        # 执行数据清洗逻辑（补充原代码缺失的清洗执行）
+        cleaned_df = st.session_state["cleaned_df"].copy()
+        
+        # 处理缺失值
+        if m_strat == lang["missing_drop_rows"]:
+            cleaned_df = cleaned_df.dropna()
+        elif m_strat == lang["missing_drop_cols"]:
+            cleaned_df = cleaned_df.dropna(axis=1)
+        elif m_strat == lang["missing_fill_mean"]:
+            for col in num_cols:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mean())
+        elif m_strat == lang["missing_fill_median"]:
+            for col in num_cols:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].median())
+        elif m_strat == lang["missing_fill_mode"]:
+            for col in cat_cols:
+                cleaned_df[col] = cleaned_df[col].fillna(cleaned_df[col].mode()[0])
+        elif m_strat == lang["missing_fill_custom"] and custom_val:
+            cleaned_df = cleaned_df.fillna(custom_val)
+        
+        # 处理重复行
+        if d_strat == lang["dup_drop_all"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep=False)
+        elif d_strat == lang["dup_keep_first"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep="first")
+        elif d_strat == lang["dup_keep_last"]:
+            cleaned_df = cleaned_df.drop_duplicates(keep="last")
+        
+        # 处理异常值
+        if o_strat != lang["outlier_keep"] and o_cols:
+            cleaned_df = handle_outliers(cleaned_df, o_cols, o_strat.split("：")[-1] if "：" in o_strat else o_strat)
+        
+        # 更新会话状态
+        st.session_state["cleaned_df"] = cleaned_df
         log = []
         if m_strat != lang["missing_keep"]: log.append(f"缺失值：{m_strat}")
         if d_strat != lang["dup_keep"]: log.append(f"重复行：{d_strat}")
@@ -414,7 +464,7 @@ def main():
         st.session_state["clean_log"] = log
         st.success(lang["clean_success"])
 
-    # 可视化模块（强制绑定中文字体，彻底解决方块）
+    # 可视化模块（修复中文显示）
     st.subheader(lang["auto_viz"])
     t1, t2, t3, t4 = st.tabs([lang["histogram_title"], lang["bar_chart_title"], lang["heatmap_title"], lang["pie_chart_title"]])
 
@@ -423,16 +473,21 @@ def main():
             col = st.selectbox(lang["histogram_select"], num_cols, key="hist_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.histplot(st.session_state["cleaned_df"][col], kde=True, ax=ax)
-            # 强制指定中文字体
+            
+            # 设置中文字体（标题/标签/刻度）
             ax.set_title(lang["dist_title"].format(col=col), fontproperties=font_prop, fontsize=12)
             ax.set_xlabel(col, fontproperties=font_prop, fontsize=11)
             ax.set_ylabel("频数" if sel_lang == "zh" else "Frequency", fontproperties=font_prop, fontsize=11)
-            # 刻度标签也绑定字体
+            
+            # 刻度标签字体设置
             for label in ax.get_xticklabels() + ax.get_yticklabels():
                 label.set_fontproperties(font_prop)
+            
             plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            # 保存到图表字典用于批量下载
+            st.session_state["generated_charts"][f"直方图_{col}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_numeric_cols"])
 
@@ -442,15 +497,18 @@ def main():
             bn = st.selectbox(lang["bar_num_select"], num_cols, key="bar_num_unique")
             fig, ax = plt.subplots(figsize=(10,5))
             sns.barplot(x=st.session_state["cleaned_df"][bc], y=st.session_state["cleaned_df"][bn], ax=ax)
-            # 强制指定中文字体
+            
+            # 设置中文字体
             plt.xticks(rotation=45, fontproperties=font_prop, fontsize=10)
             ax.set_xlabel(bc, fontproperties=font_prop, fontsize=11)
             ax.set_ylabel(bn, fontproperties=font_prop, fontsize=11)
             for label in ax.get_yticklabels():
                 label.set_fontproperties(font_prop)
+            
             plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            st.session_state["generated_charts"][f"柱状图_{bc}_{bn}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_categorical_cols"] if not cat_cols else lang["no_numeric_cols"])
 
@@ -459,13 +517,16 @@ def main():
             fig, ax = plt.subplots(figsize=(10,6))
             corr = st.session_state["cleaned_df"][num_cols].corr()
             sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax, fmt=".2f")
-            # 强制指定中文字体
+            
+            # 设置中文字体
             ax.set_title(lang["heatmap_title"], fontproperties=font_prop, fontsize=12)
             for label in ax.get_xticklabels() + ax.get_yticklabels():
                 label.set_fontproperties(font_prop)
+            
             plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            st.session_state["generated_charts"]["相关性热力图"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_numeric_cols"])
 
@@ -475,13 +536,16 @@ def main():
             cnt = st.session_state["cleaned_df"][pc].value_counts()
             fig, ax = plt.subplots(figsize=(8,8))
             ax.pie(cnt, labels=cnt.index, autopct="%1.1f%%")
-            # 强制指定中文字体
+            
+            # 设置中文字体
             ax.set_title(lang["pie_chart_title"], fontproperties=font_prop, fontsize=12)
             for text in ax.texts:
                 text.set_fontproperties(font_prop)
+            
             plt.tight_layout()
             st.pyplot(fig)
             st.session_state["last_chart_buf"] = save_plot_to_bytes(fig)
+            st.session_state["generated_charts"][f"饼图_{pc}"] = st.session_state["last_chart_buf"]
         else:
             st.warning(lang["no_categorical_cols"])
 
@@ -490,11 +554,26 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         if st.session_state["last_chart_buf"]:
-            st.download_button(lang["download_png"], st.session_state["last_chart_buf"], "chart.png", "image/png", key="dl_png")
+            st.download_button(
+                label=lang["download_png"],
+                data=st.session_state["last_chart_buf"],
+                file_name="chart.png",
+                mime="image/png",
+                key="dl_png"
+            )
     with col2:
         if st.session_state["generated_charts"]:
-            z = create_charts_zip(st.session_state["generated_charts"])
-            st.download_button(lang["download_zip"], z, lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S")), "application/zip", key="dl_zip")
+            zip_buf = create_charts_zip(st.session_state["generated_charts"])
+            zip_filename = lang["zip_filename"].format(time=datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+            st.download_button(
+                label=lang["download_zip"],
+                data=zip_buf,
+                file_name=zip_filename,
+                mime="application/zip",
+                key="dl_zip"
+            )
+        else:
+            st.info(lang["no_charts_to_download"])
 
     # 关键指标
     st.subheader(lang["key_metrics"])
@@ -510,9 +589,36 @@ def main():
     # 自动报告
     st.subheader(lang["auto_report"])
     if st.button(lang["generate_report"], key="gen_report"):
-        r = generate_analysis_report(st.session_state["original_df"], st.session_state["cleaned_df"], st.session_state["clean_log"], num_cols, cat_cols, lang)
+        r = generate_analysis_report(
+            st.session_state["original_df"], 
+            st.session_state["cleaned_df"], 
+            st.session_state["clean_log"], 
+            num_cols, 
+            cat_cols, 
+            lang
+        )
         st.session_state["analysis_report"] = r
         st.markdown(r)
+        
+        # 报告下载按钮
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label=lang["download_md"],
+                data=r,
+                file_name="analysis_report.md",
+                mime="text/markdown",
+                key="dl_report_md"
+            )
+        with col2:
+            html = markdown.markdown(r)
+            st.download_button(
+                label=lang["download_html"],
+                data=html,
+                file_name="analysis_report.html",
+                mime="text/html",
+                key="dl_report_html"
+            )
 
     # AI 分析（改为独立启动按钮，无勾选框）
     st.divider()
@@ -522,8 +628,16 @@ def main():
     if st.button(lang["generate_ai_report"], type="primary", key="gen_ai"):
         with st.spinner(lang["ai_report_loading"]):
             try:
-                summary = f"行数：{st.session_state['cleaned_df'].shape[0]}，列数：{st.session_state['cleaned_df'].shape[1]}，有效数值列：{num_cols}，分类列：{cat_cols}"
-                ai_report = call_qwen_ai(summary, sel_lang)
+                # 构建更详细的数据摘要
+                summary = f"""
+基础信息：行数={st.session_state['cleaned_df'].shape[0]}，列数={st.session_state['cleaned_df'].shape[1]}
+数值列：{num_cols}
+分类列：{cat_cols}
+缺失值总数：{st.session_state['cleaned_df'].isnull().sum().sum()}
+重复行数：{st.session_state['cleaned_df'].duplicated().sum()}
+清洗操作：{st.session_state['clean_log']}
+                """
+                ai_report = call_qwen_ai(summary.strip(), sel_lang)
                 st.session_state["ai_analysis_report"] = ai_report
                 st.markdown("---")
                 st.markdown(ai_report)
@@ -535,10 +649,22 @@ def main():
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col1:
-            st.download_button(lang["download_md"], st.session_state["ai_analysis_report"], "ai_report.md", key="dl_md")
+            st.download_button(
+                label=lang["download_md"],
+                data=st.session_state["ai_analysis_report"],
+                file_name="ai_report.md",
+                mime="text/markdown",
+                key="dl_ai_md"
+            )
         with col2:
             html = markdown.markdown(st.session_state["ai_analysis_report"])
-            st.download_button(lang["download_html"], html, "ai_report.html", key="dl_html")
+            st.download_button(
+                label=lang["download_html"],
+                data=html,
+                file_name="ai_report.html",
+                mime="text/html",
+                key="dl_ai_html"
+            )
 
 if __name__ == "__main__":
     main()
