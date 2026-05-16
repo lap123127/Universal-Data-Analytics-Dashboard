@@ -19,7 +19,7 @@ plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.family'] = 'sans-serif'
 
 # 你的API Key
-API_KEY = "sk-13584a16dcf94b3fb0a982b4296df6e6"
+API_KEY = "sk-cda2810abc0f4ecf943de5a6c70b80e6"
 LANG_CONFIG = {
     "en": {
         "page_title": "Universal Data Visualization Dashboard",
@@ -229,7 +229,6 @@ def get_valid_columns(df):
     valid_cat_cols = [col for col in cat_cols if not any(k in str(col).lower() for k in exclude_keywords)]
     return valid_num_cols, valid_cat_cols
 
-# AI调用函数
 def call_qwen_ai(data_summary, lang="zh"):
     url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     if lang == "zh":
@@ -245,7 +244,15 @@ Data: {data_summary}"""
     try:
         resp = requests.post(url, headers=headers, json=payload, timeout=25)
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip()
+
+        # ========== 关键：打印真实返回信息 ==========
+        result = resp.json()
+        print("====== 阿里云真实返回 ======")
+        print("你请求的模型:", payload["model"])
+        print("实际使用模型:", result.get("model", "找不到"))
+        print("===========================\n")
+
+        return result["choices"][0]["message"]["content"].strip()
     except Exception as e:
         raise Exception(str(e))
 
